@@ -1,0 +1,1740 @@
+---
+title: "Heath, S.K. and R.F. Long. 2019. Multiscale habitat mediates pest reduction by birds in an intensive agricultural region. Ecosphere. DOI: 10.1002/ecs2.2884"
+sub-title: "Predation models, all cocoons (includes caged and uncaged)."
+author: "Sacha K. Heath"
+date: "started 25 September 2017; code edited for publication August 2019"
+output: html_notebook
+---
+***
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(comment = NA)
+```
+
+Required packages
+
+```{r, message=FALSE}
+library(rethinking) #V 1.59; loads required packages rstan, ggplot2, StanHeaders, parallel
+library(plyr) #V 1.8.4
+library(dplyr) #V 0.7.4
+library(pROC)  #V 1.10.0
+library(ggplot2) #V 2.2.1
+library(cowplot) #V 0.9.2
+library(grid) #V 3.4.3
+library(tidyverse) #V 1.2.1
+```
+
+Colors I like that are also ok for color-blindness
+```{r, fig.height=3, fig.width=14}
+skhpal<-c("black","gray25","gray75", "slateblue","darkslateblue", "royalblue4", "chartreuse3","forestgreen", "darkgreen","chocolate3","darkgoldenrod1", "darkgoldenrod3", "#fed976","#feb24c","#fd8d3c", "#fc4e2a", "#e31a1c","#b10026")
+
+plot(x = 1:length(skhpal), y = rep(1, length(skhpal)), pch = 19, cex = 5, 
+    col = skhpal, yaxt = "n", bty = "n", xaxt = "n", xlab = "", ylab = "")
+text(x = 1:length(skhpal), y = rep(1, length(skhpal), labels = seq(1:length(skhpal))))
+```
+
+Code presented in order of when it is referred to in the text
+
+**Analyses: Predation (caged and uncaged larvae)**
+Note: There will be a slightly different result each time models are refit because sampling. I saved outputs for models presesnted in the paper as .rds in order to exactly replicate results. If you want the exact result the paper achieved, load and the .RDS files and chunks for each model. If you want to fit a new model and compare results, rerun the model fit chunk (rename the model and the saved rds file first). 
+
+
+Reduce columns for stan
+```{r}
+d <- read.csv("./predation_data/predation_covariates_d1994_anon.csv")
+
+d1<- d %>%
+  dplyr::select(cage, pred, pair, orchard, distanceD, treeU, habitatD, r0500_nat_seminat) %>% 
+  mutate(tree = treeU,
+         orch = orchard,
+         loc = distanceD,
+         hab = habitatD,
+         cage = cage,
+         pair=pair,
+         pred=pred,
+         seminat_c = r0500_nat_seminat - mean(r0500_nat_seminat)) %>% # exploration selected 500m radius 
+  dplyr::select(tree, pair, orch, hab, loc, cage, pred, seminat_c)
+
+head(d1)
+```
+
+*Independence of larvae on same tree? TPF*
+
+Predation rates for larvae on the same tree likely not independent due to area-restricted foraging behaviro of birds. Including clustering by tree seems like it would greatly overfit? How about including an "another larvae on this tree was predated" as a 0 or 1? For example, the Neighbor Predation Factor (NPF) as in Grof-Tisza et al. (2017).
+
+Tree Predation Factor (i.e., whether or not another larvae on the same tree was predated) TPF = 0 no other larvae predated on tree (whether or not I was predated); TPF=1 at least one other larvae predated on tree (whether or not I was predated). 
+
+Generate Tree Predation Factor 
+```{r}
+treepred<- d1 %>% 
+  group_by(tree) %>%
+  summarise(numtreepred = sum(pred))
+
+tcheck2<-merge(x=d1, y=treepred, by.x=c("tree"), by.y=c("tree"), sort=TRUE)
+
+t <- tcheck2 %>%
+  mutate(TPF = ifelse(numtreepred==0,0,1)) %>%
+  mutate(TPF = ifelse(numtreepred==1 & pred==1,0,TPF)) %>%
+  mutate(TPF = ifelse(numtreepred>1 & pred==0,1,TPF))  %>%
+  mutate(TPF = ifelse(numtreepred>1 & pred==1,1,TPF)) 
+  
+dstan <- t[,c(1:8,10)]
+head(dstan)
+```
+
+*Observed % predation all else equal*
+```{r}
+dstan %>%
+  mutate(cage.f = as.factor(cage)) %>%
+  group_by(orchard, cage) %>%
+  summarize(meanpred = mean(pred),
+            sdpred = sd(pred))
+```
+
+*Determine best distribution assumption*
+
+Binomial 
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+b0 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch],
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+# had to increase iterations to improve Rhat
+```
+
+```{r}
+#plot(b0)
+#saveRDS(b0, "b0.RDS")
+b0<-readRDS("./predation_data/predation_models/b0.rds")
+b0.prec <- precis(b0, depth = 2, prob = 0.95)
+b0.prec
+```
+
+```{r}
+b0.est<-b0.prec@output[[1]]
+b0.orch_est<-b0.est[c(1:20)]
+b0.pred<-b0.est[c(21)] + b0.orch_est
+```
+
+*Beta-binomial*
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+bb0 <- map2stan(
+  alist(
+    pred ~ dbetabinom(1, p, theta),
+    logit(p) <- a + a_orch[orch],
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    sigma_orch ~ dcauchy(0,1),
+    theta ~ dcauchy(0,1)),
+  data = dstan, 
+  constraints = list(theta = "lower = 0"),
+  warmup = 2000, iter=5000, chains = 3, cores = 2) 
+```
+
+```{r}
+plot(bb0)
+#saveRDS(bb0, "bb0.RDS")
+bb0<-readRDS("./predation_data/predation_models/bb0.rds")
+bb0.prec <- precis(bb0, depth = 2, prob = 0.95)
+bb0.prec
+```
+
+```{r}
+bb0.est<-bb0.prec@output[[1]]
+bb0.orch_est<-bb0.est[c(1:20)]
+bb0.pred<-bb0.est[c(21)] + bb0.orch_est
+```
+
+plot comparing each type of model predictions
+```{r, fig.height = 7, fig.width = 14 , eval=FALSE }
+e.pred<-tapply(dstan$pred,dstan$orch, mean)
+
+par(mfrow=c(2,1))
+plot(1:20, e.pred, xlab="orchard", 
+     ylab = "predation rate", ylim = c(0,1),col="black", pch=16)
+points(1:20, logistic(b0.pred), col = "blue", pch=5 ) #binomial
+text(1:20, logistic(b0.pred), labels=c("B"), col = "blue", pos=2, offset=0.75,cex=0.5)
+#
+plot(1:20, e.pred, xlab="orchard", 
+     ylab = "predation rate", ylim = c(0,1),col="black", pch=16)
+points(1:20, logistic(bb0.pred), col = "purple", pch=5 ) #beta binomial
+text(1:20, logistic(bb0.pred), labels=c("BB"), col = "purple", pos=2, offset=0.75,cex=0.5)
+#
+#points(1:20, p1est, col = "green", pch=4 ) #Geometric
+#text(1:20, p1est, labels=c("G"), pos=3, col = "green", offset=0.5,cex=0.5)
+```
+Binomial and Beta-binomial predictions are exactly the same, so I'll stick with the simpler binomial
+
+
+*Varying effects structure*
+
+Compare orchard level, tree nested within orchard, and orchard level with TPF as fixed effect.
+
+The orchard level varying intercept model:
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+b0 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch],
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+# had to increase iterations to improve Rhat
+
+plot(b0)
+#saveRDS(b0, "b0.RDS")
+```
+
+```{r}
+b0<-readRDS("./predation_data/predation_models/b0.rds")
+b0.prec <- precis(b0, depth=2, prob = 0.95)
+b0.prec
+```
+
+The nested orchard[tree] varying intercept model:
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+bt0 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + a_tree[tree],
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a_tree[tree] ~ dnorm(0, sigma_tree),
+    a ~ dnorm(0,10),
+    sigma_orch ~ dcauchy(0,1),
+    sigma_tree ~ dcauchy (0,1)),
+  data = dstan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+plot(bt0)
+#saveRDS(bt0, "bt0.RDS")
+```
+
+```{r}
+bt0<-readRDS("./predation_data/predation_models/bt0.rds")
+bt0.prec <- precis(bt0, depth= 2, prob = 0.95)
+
+round(bt0.prec@output[415:423,],2)
+```
+
+Plot the variation in the two random effects in bt0: 
+```{r}
+post <- extract.samples(bt0)
+dens(post$sigma_tree, xlab = "sigma", xlim = c(0,5))
+dens(post$sigma_orch, col = rangi2, lwd = 2, add =TRUE)
+text(0.75, 0.85, "orchard", col=rangi2)
+text(2.5, 2, "tree")
+```
+
+The estimated variation among trees (2.27) was greater than among orchards (1.42) in bt0, and orchards is also high. According to [**McElreath. 2016, Page 375**](http://xcelab.net/rmpubs/rethinking/Statistical_Rethinking_sample.pdf) this does add an overfitting risk. 
+
+Here I plot the per orchard predictions from each model as the error from the "true" (empirical) probabilities:
+
+Using the orchard intercept model, I compute from the posterior distriubtion the total intercept predation estimates for each orchard on the probability scale.
+```{r}
+post.b0 <- extract.samples(b0)
+total_a_orch <- sapply(1:20, function(orchard) post.b0$a + 
+                         post$a_orch[,orchard])
+logit_orch<-apply(total_a_orch, 2, mean)
+p_orch<-round(logistic(logit_orch), 2)
+p_orch
+```
+
+Using the nested orchard(tree) intercept model, I compute from the posterior distriubtion the total intercept predation estimates for each orchard on the probability scale.
+```{r}
+post.bt0 <- extract.samples(bt0)
+total_a_orch_tree <- sapply(1:20, function(orchard) post.bt0$a + 
+                              post$a_orch[,orchard] + post$a_tree[,orchard])
+logit_orch_tree<-apply(total_a_orch_tree, 2, mean)
+p_orch_tree<-round(logistic(logit_orch_tree), 2)
+p_orch_tree
+```
+
+Compute empirical per orchard predation.
+```{r}
+o <- ustan %>%
+  group_by(orch) %>%
+  summarize(p_pred = round(mean(pred),2))
+o.mean<-mean(o$p_pred)
+```
+
+Compute the error of the prediction from the empirical value
+```{r}
+orch_int_error <- abs(p_orch - o$p_pred)
+orch_tree_int_error <- abs(p_orch_tree - o$p_pred)
+
+orch_mean_error <- abs(logistic(-1.11) - o.mean)
+orch_tree_mean_error <-abs(logistic(-1.64) - o.mean)
+```
+
+Plot
+```{r, fig.width=8}
+plot(1:20, orch_int_error, col = "black", 
+     xlab = "orchard", ylab ="absolute error", ylim=c(0,0.5), pch = 16, xaxt="n")
+axis(1, at=c(1:20), cex=0.5)
+points(1:20,orch_tree_int_error, col = "green", pch = 16 )
+legend(1, 0.5, legend=c("1|orchard", "1|orchard(tree)"),
+       col=c("black", "green"), pch=16, cex=0.8)
+abline(h=orch_mean_error, col = "black")
+abline(h=orch_tree_mean_error, col = "green")
+```
+THis is the error of varying orchard intercept model (black points) and varying orchard[tree] intercept model (green points). Lines represent the grand mean error for each model by color, respectively. The horizontal axis represents the orchard number, the vertical axis measures the absolute error in the predicted proportion of depredated cocoons, compared to the true value based on emperical proportions. The higher the point, the worse the estimate.** 
+
+Shows that the model estimating orchard(tree) makes poorer per-orchard predictions in 14/20 cases. 
+
+But we are most intersted in predictions from models that include the fixed effects of cage, orchard location, and margin habitat, for which the orchard(tree) varying effects structure might be more important. So in light of Reviewer #2's comments I compared the orchard level predictions of those models and also the model including TPF as a fixed effect. 
+
+Varying intercepts for orchard
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+b10 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bcage*cage + bhab*hab + bloc*loc,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bcage ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+plot(b10)
+#saveRDS(b10, "b10.rds")
+```
+
+```{r}
+b10<-readRDS("./predation_data/predation_models/b10.rds")
+b10.prec <- precis(b10, depth = 2, prob = 0.95)
+b10.prec
+```
+
+Varying intercepts for orchard[tree]
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+ot10 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + a_tree[tree] + bcage*cage + bhab*hab + bloc*loc,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a_tree[tree] ~ dnorm(0, sigma_tree),
+    a ~ dnorm(0,10),
+    bcage ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1), 
+    sigma_tree ~ dcauchy (0,1) ),
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+plot(ot10)
+#saveRDS(ot10, "ot10.rds")
+```
+
+```{r}
+ot10<-readRDS("./predation_data/predation_models/ot10.rds")
+ot10.prec <- precis(ot10, depth = 2, prob = 0.95)
+round(ot10.prec@output[415:426,],2)
+```
+
+The model with TPF fixed effect and varying orchard intercepts 
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+p10.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bcage*cage + bhab*hab + bloc*loc,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1), 
+    bcage ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+plot(p10.t)
+#saveRDS(p10.t, "p10t.rds")
+```
+
+```{r}
+p10.t<-readRDS("./predation_data/predation_models/p10t.rds")
+p10.t.prec <- precis(p10.t, depth = 2, prob = 0.95)
+p10.t.prec
+```
+
+Compute the total intercept predation estimates for each orchard, from the orchard only intercept model, on the probability scale
+```{r}
+post.b10 <- extract.samples(b10)
+b10_orch <- sapply(1:20, function(orchard) post.b10$a + 
+                     post.b10$bcage + post.b10$bhab + post.b10$bloc +
+                     post.b10$a_orch[,orchard])
+logit_b10<-apply(b10_orch, 2, mean)
+o$b10_pred<-round(logistic(logit_b10), 2)
+```
+
+Compute the total intercept predation estimates for each orchard, from the orchard(tree) intercept model, on the probability scale.
+```{r}
+post.ot10 <- extract.samples(ot10)
+ot10_orch_tree <- sapply(1:20, function(orchard) post.ot10$a + 
+                           post.ot10$bcage + post.ot10$bhab + post.ot10$bloc + 
+                           post.ot10$a_orch[,orchard] + post.ot10$a_tree[,orchard])
+logit_ot10<-apply(ot10_orch_tree, 2, mean)
+o$ot10_pred<-round(logistic(logit_ot10), 2)
+```
+
+Compute the total intercept predation estimates for each orchard, from the model with TPF included as a fixed effect, on the probability scale 
+```{r}
+post.p10.t <- extract.samples(p10.t)
+p10.t_orch <- sapply(1:20, function(orchard) post.p10.t$a + 
+                       post.p10.t$bcage + post.p10.t$bhab + post.p10.t$bloc +
+                       post.p10.t$a_orch[,orchard])
+logit_p10.t<-apply(p10.t_orch, 2, mean)
+o$p10.t_pred<-round(logistic(logit_p10.t), 2)
+```
+
+Compute the per orchard prediction error
+```{r}
+o$b10_error <- abs(o$b10_pred - o$p_pred)
+o$ot10_error <- abs(o$ot10_pred - o$p_pred)
+o$p10.t_error <- abs(o$p10.t_pred - o$p_pred)
+
+b10_mean_error <- abs(logistic(-0.48) - o.mean)
+ot10_tree_mean_error <-abs(logistic(-0.49) - o.mean)
+p10.t_mean_error <- abs(logistic(-0.81) - o.mean)
+```
+
+Plot the per orchard predictions from each of the three models and compare their error from the "true" (empirical) probabilities.
+```{r, fig.width=8}
+plot(1:20, o$b10_error, col = "black", 
+     xlab = "orchard", ylab ="absolute error", ylim=c(0,0.5), pch = 16, xaxt="n")
+axis(1, at=c(1:20), cex=0.5)
+points(0.1+(1:20),o$ot10_error, col = "green", pch = 16 )
+points((1:20)-0.1,o$p10.t_error, col = "blue", pch = 16 )
+legend(15, 0.5, legend=c("1|orchard", "1|orchard(tree)", "1|orchard + TPF"),
+       col=c("black", "green", "blue"), pch=16, cex=0.8)
+abline(h=b10_mean_error, col = "black")
+abline(h=ot10_tree_mean_error, col = "green")
+abline(h=p10.t_mean_error, col = "blue")
+```
+THis plots the error of the varying orchard intercept model (black points), orchard(tree) intercepts model (green points), and the orchard intercept model with TPF as a fixed effect. Lines represent the grand mean error for each model by color, respectively. The horizontal axis represents the orchard number, the vertical axis measures the absolute error in the predicted proportion of depredated cocoons, compared to the "true"" value based on emperical proportions. The higher the point, the worse the estimate.** 
+
+Figure shows that in 17/20 cases, the model with intercept varying effects structure *orchard(tree)* makes poorer per-orchard predictions than either the *orchard intercept* model or the model with the *Tree Predation Factor (TPF) as a fixed effect*. Thus, including the more complex varying effects structure which estimates an intercept for each of 400 trees risks overfitting while not improving predictions. We argue that retaining the varying effects structure and using the binary fixed effect dummy variable TPF is preferred.
+
+McElreath, R. 2016. Statistical Rethinking: A Bayesian Course with Examples in R and Stan. CRC Press, Boca Raton.[Click on citation above to access the cited page.]
+
+*Build models*
+
+See intercept model b0 above
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+b1 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bcage*cage,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bcage ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(b1)
+#saveRDS(b1, "b1.RDS")
+b1<-readRDS("./predation_data/predation_models/b1.rds")
+b1.prec <- precis(b1, depth = 2, prob = 0.95)
+b1.prec
+
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+b2 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bhab*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bhab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(b2)
+#saveRDS(b2, "b2.rds")
+b2<-readRDS("./predation_data/predation_models/b2.rds")
+b2.prec <- precis(b2, depth = 2, prob = 0.95)
+b2.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+b3 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bloc*loc,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(b3)
+#saveRDS(b3, "b3.rds")
+b3<-readRDS("./predation_data/predation_models/b3.rds")
+b3.prec <- precis(b3, depth = 2, prob = 0.95)
+b3.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+b4 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bcage*cage + bhab*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bcage ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(b4)
+#saveRDS(b4, "b4.rds")
+b4<-readRDS("./predation_data/predation_models/b4.rds")
+b4.prec <- precis(b4, depth = 2, prob = 0.95)
+b4.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+b5 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bcage*cage + bhab*hab + bcagexhab*(hab*cage),
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bcage ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    bcagexhab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(b5)
+#saveRDS(b5, "b5.rds")
+b5<-readRDS("./predation_data/predation_models/b5.rds")
+b5.prec <- precis(b5, depth = 2, prob = 0.95)
+b5.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+b6 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bcage*cage + bloc*loc,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bcage ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(b6)
+#saveRDS(b6, "b6.rds")
+b6<-readRDS("./predation_data/predation_models/b6.rds")
+b6.prec <- precis(b6, depth = 2, prob = 0.95)
+b6.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+b7 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bcage*cage + bloc*loc + bcagexloc*(cage*loc),
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bcage ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    bcagexloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(b7)
+#saveRDS(b7, "b7.rds")
+b7<-readRDS("./predation_data/predation_models/b7.rds")
+b7.prec <- precis(b7, depth = 2, prob = 0.95)
+b7.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+b8 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bhab*hab + bloc*loc,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bhab ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(b8)
+#saveRDS(b8, "b8.rds")
+b8<-readRDS("./predation_data/predation_models/b8.rds")
+b8.prec <- precis(b8, depth = 2, prob = 0.95)
+b8.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+b9 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bhab*hab + bloc*loc + bhabxloc*(hab*loc),
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bhab ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    bhabxloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(b9)
+#saveRDS(b9, "b9.rds")
+b9<-readRDS("./predation_data/predation_models/b9.rds")
+b9.prec <- precis(b9, depth = 2, prob = 0.95)
+b9.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+b10 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bcage*cage + bhab*hab + bloc*loc,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bcage ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(b10)
+#saveRDS(b10, "b10.rds")
+b10<-readRDS("./predation_data/predation_models/b10.rds")
+b10.prec <- precis(b10, depth = 2, prob = 0.95)
+b10.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+b11 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bcage*cage + bhab*hab + bcagexhab*(cage*hab) + bloc*loc,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bcage ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    bcagexhab ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(b11)
+#saveRDS(b11, "b11.rds")
+b11<-readRDS("./predation_data/predation_models/b11.rds")
+b11.prec <- precis(b11, depth = 2, prob = 0.95)
+b11.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+b12 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bcage*cage + bloc*loc + bcagexloc*(cage*loc) + bhab*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bcage ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    bcagexloc ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(b12)
+#saveRDS(b12, "b12.rds")
+b12<-readRDS("./predation_data/predation_models/b12.rds")
+b12.prec <- precis(b12, depth = 2, prob = 0.95)
+b12.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+b13 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bhab*hab + bloc*loc + bhabxloc*(hab*loc) + bcage*cage,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bhab ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    bhabxloc ~ dnorm(0,1),
+    bcage ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(b13)
+#saveRDS(b13, "b13.rds")
+b13<-readRDS("./predation_data/predation_models/b13.rds")
+b13.prec <- precis(b13, depth = 2, prob = 0.95)
+b13.prec
+
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+b14 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bcage*cage + bhab*hab + bloc*loc + bcagexhabxloc*(cage*hab*loc),
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bcage ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    bcagexhabxloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(b14)
+#saveRDS(b14, "b14.rds")
+b14<-readRDS("./predation_data/predation_models/b14.rds")
+b14.prec <- precis(b14, depth = 2, prob = 0.95)
+b14.prec
+```
+
+Compare WAIC
+```{r}
+pred_WAIC <-compare(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10,
+                    b11, b12, b13)
+pred_WAIC
+```
+
+Include TPF
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+p0.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+# had to increase iterations to improve Rhat
+```
+
+```{r}
+#plot(p0.t)
+#saveRDS(p0.t, "p0t.rds")
+p0.t<-readRDS("./predation_data/predation_models/p0t.rds")
+p0.t.prec <- precis(p0.t, prob = 0.95)
+p0.t.prec
+
+```
+
+Fit same models with TPF.
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+p1.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bcage*cage + bTPF*TPF,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1),
+    bcage ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(p1.t)
+#saveRDS(p1.t, "p1t.RDS")
+p1.t<-readRDS("./predation_data/predation_models/p1t.rds")
+p1.t.prec <- precis(p1.t, depth = 2, prob = 0.95)
+p1.t.prec
+
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+p2.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bhab*hab + bTPF*TPF,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(p2.t)
+#saveRDS(p2.t, "p2t.rds")
+p2.t<-readRDS("./predation_data/predation_models/p2t.rds")
+p2.t.prec <- precis(p2.t, depth = 2, prob = 0.95)
+p2.t.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+p3.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bloc*loc + bTPF*TPF,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(p3.t)
+saveRDS(p3.t, "p3t.rds")
+p3.t<-readRDS("./predation_data/predation_models/p3t.rds")
+p3.t.prec <- precis(p3.t, depth = 2, prob = 0.95)
+p3.t.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+p4.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bcage*cage + bhab*hab + bTPF*TPF,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1), 
+    bcage ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(p4.t)
+#saveRDS(p4.t, "p4t.rds")
+p4.t<-readRDS("./predation_data/predation_models/p4t.rds")
+p4.t.prec <- precis(p4.t, depth = 2, prob = 0.95)
+p4.t.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+p5.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bcage*cage + bhab*hab + bcagexhab*(hab*cage),
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1),
+    bcage ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    bcagexhab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(p5.t)
+#saveRDS(p5.t, "p5t.rds")
+p5.t<-readRDS("./predation_data/predation_models/p5t.rds")
+p5.t.prec <- precis(p5.t, depth = 2, prob = 0.95)
+p5.t.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+p6.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bcage*cage + bloc*loc,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1),
+    bcage ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(p6.t)
+#saveRDS(p6.t, "p6t.rds")
+p6.t<-readRDS("./predation_data/predation_models/p6t.rds")
+p6.t.prec <- precis(p6.t, depth = 2, prob = 0.95)
+p6.t.prec
+```
+
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+p7.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bcage*cage + bloc*loc + bcagexloc*(cage*loc),
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1),
+    bcage ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    bcagexloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(p7.t)
+#saveRDS(p7.t, "p7t.rds")
+p7.t<-readRDS("./predation_data/predation_models/p7t.rds")
+p7.t.prec <- precis(p7.t, depth = 2, prob = 0.95)
+p7.t.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+p8.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bhab*hab + bloc*loc,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1), 
+    bhab ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(p8.t)
+#saveRDS(p8.t, "p8t.rds")
+p8.t<-readRDS("./predation_data/predation_models/p8t.rds")
+p8.t.prec <- precis(p8.t, depth = 2, prob = 0.95)
+p8.t.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+p9.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bhab*hab + bloc*loc + bhabxloc*(hab*loc),
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1), 
+    bhab ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    bhabxloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(p9.t)
+#saveRDS(p9.t, "p9t.rds")
+p9.t<-readRDS("./predation_data/predation_models/p9t.rds")
+p9.t.prec <- precis(p9.t, depth = 2, prob = 0.95)
+p9.t.prec
+```
+
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+p10.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bcage*cage + bhab*hab + bloc*loc,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1), 
+    bcage ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(p10.t)
+#saveRDS(p10.t, "p10t.rds")
+p10.t<-readRDS("./predation_data/predation_models/p10t.rds")
+p10.t.prec <- precis(p10.t, depth = 2, prob = 0.95)
+p10.t.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+p11.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bcage*cage + bhab*hab + bcagexhab*(cage*hab) + bloc*loc,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1), 
+    bcage ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    bcagexhab ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(p11.t)
+#saveRDS(p11.t, "p11t.rds")
+p11.t<-readRDS("./predation_data/predation_models/p11t.rds")
+p11.t.prec <- precis(p11.t, depth = 2, prob = 0.95)
+p11.t.prec
+```
+
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+p12.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bcage*cage + bloc*loc + bcagexloc*(cage*loc) + bhab*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1), 
+    bcage ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    bcagexloc ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(p12.t)
+#saveRDS(p12.t, "p12t.rds")
+p12.t<-readRDS("./predation_data/predation_models/p12t.rds")
+p12.t.prec <- precis(p12.t, depth = 2, prob = 0.95)
+p12.t.prec
+```
+
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+p13.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bhab*hab + bloc*loc + bhabxloc*(hab*loc) + bcage*cage,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1), 
+    bhab ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    bhabxloc ~ dnorm(0,1),
+    bcage ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(p13.t)
+#saveRDS(p13.t, "p13t.rds")
+p13.t<-readRDS("./predation_data/predation_models/p13t.rds")
+p13.t.prec <- precis(p13.t, depth = 2, prob = 0.95)
+p13.t.prec
+```
+
+```{r, eval = FALSE, warnings = FALSE, comment=FALSE}
+p14.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bcage*cage + bhab*hab + bloc*loc + bcagexhabxloc*(cage*hab*loc),
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1), 
+    bhab ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    bcage ~ dnorm(0,1),
+    bcagexhabxloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+
+```
+
+```{r}
+#plot(p14.t)
+#saveRDS(p14.t, "p14t.rds")
+p14.t<-readRDS("./predation_data/predation_models/p14t.rds")
+p14.t.prec <- precis(p14.t, depth = 2, prob = 0.95)
+p14.t.prec
+```
+
+Check on likely interaction between TPF and cage
+```{r}
+p15.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bcage*cage + bTPFxcage*(TPF*cage),
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1), 
+    bcage ~ dnorm(0,1),
+    bTPFxcage ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+```
+
+```{r}
+#plot(p15.t)
+#saveRDS(p15.t, "p15t.rds")
+p15.t<-readRDS("./predation_data/predation_models/p15t.rds")
+p15.t.prec <- precis(p15.t, depth = 2, prob = 0.95)
+p15.t.prec
+
+WAIC(p15.t)
+```
+
+varying slope
+```{r}
+vs_p15.tv<- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- A + BC*cage + BCT*TPF*cage + bTPF*TPF,
+    A <- a + a_orch[orch],
+    BC <- bcage + bcage_orch[orch],
+    BCT <- bcageXTPF + bcageXTPF_orch[orch],
+    c(a_orch, bcage_orch,bcageXTPF_orch)[orch] ~ dmvnorm2(0,sigma_orch, Rho_orch),
+    a ~ dnorm(0,1),
+    c(bcage, bcageXTPF, bTPF) ~ dnorm(0,1), 
+    sigma_orch ~ dcauchy(0,1),
+    Rho_orch ~ dlkjcorr(1)), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+```
+
+```{r}
+compare(vs_p15.tv, p15.t)
+precis(vs_p15.tv, depth=2, prob=0.95)
+saveRDS(vs_p15.tv, "vs_p15.tv")
+```
+
+
+```{r}
+p16.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bcage*cage + bTPFxcage*(TPF*cage) +bloc*loc,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1), 
+    bcage ~ dnorm(0,1),
+    bTPFxcage ~ dnorm(0,1),
+    bloc~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+```
+
+```{r}
+#plot(p16.t)
+#saveRDS(p16.t, "p16t.rds")
+p16.t<-readRDS("./predation_data/predation_models/p16t.rds")
+p16.t.prec <- precis(p16.t, depth = 2, prob = 0.95)
+p16.t.prec
+
+WAIC(p16.t)
+```
+
+varying intercept
+```{r}
+vs_p16.tv<- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- A + BC*cage + BCT*TPF*cage + bTPF*TPF + bloc*loc,
+    A <- a + a_orch[orch],
+    BC <- bcage + bcage_orch[orch],
+    BCT <- bcageXTPF + bcageXTPF_orch[orch],
+    c(a_orch, bcage_orch,bcageXTPF_orch)[orch] ~ dmvnorm2(0,sigma_orch, Rho_orch),
+    a ~ dnorm(0,1),
+    c(bcage, bcageXTPF, bTPF, bloc) ~ dnorm(0,1), 
+    sigma_orch ~ dcauchy(0,1),
+    Rho_orch ~ dlkjcorr(1)), 
+  data = dstan, warmup = 100, iter=300, chains = 1, cores = 1) 
+```
+
+Varying intercept + varying slope model greatly outperforms varying intercept only.
+```{r}
+compare(p16.t, vs_p16.tv)
+saveRDS(vs_p16.tv, "vs_p16.tv")
+```
+
+
+```{r}
+p17.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bcage*cage + bTPFxcage*(TPF*cage) + bhab*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1), 
+    bcage ~ dnorm(0,1),
+    bTPFxcage ~ dnorm(0,1),
+    bhab~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+```
+
+```{r}
+#plot(p17.t)
+#saveRDS(p17.t, "p17t.rds")
+p17.t<-readRDS("./predation_data/predation_models/p17t.rds")
+p17.t.prec <- precis(p17.t, depth = 2, prob = 0.95)
+p17.t.prec
+
+WAIC(p17.t)
+```
+
+```{r}
+p18.t <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bcage*cage + bTPFxcage*(TPF*cage) + bloc*loc + bhab*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1), 
+    bcage ~ dnorm(0,1),
+    bTPFxcage ~ dnorm(0,1),
+    bloc ~ dnorm(0,1), 
+    bhab~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+```
+
+```{r}
+#plot(p18.t)
+#saveRDS(p18.t, "p18t.rds")
+p18.t<-readRDS("./predation_data/predation_models/p18t.rds")
+p18.t.prec <- precis(p18.t, depth = 2, prob = 0.95)
+p18.t.prec
+
+WAIC(p18.t)
+```
+
+Intermediate landscape-complexity hypothesis OR landscape-moderated conservation effectiveness hypothesis
+all need to have TPF and Cage and possibly TPFXCage
+1. TPF*Cage + Effect of habitat x landscape
+2. TPF*Cage + Effect of cage x landscape
+3. TPF*Cage + Effect of loc x landscape
+
+```{r}
+p.ilch <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bcage*cage + bseminat*seminat_c + bcagexseminat*(cage*seminat_c),
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1),
+    bcage ~ dnorm(0,1),
+    bseminat ~ dnorm(0,1),
+    bcagexseminat ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+```
+
+```{r, fig.width=5, fig.height=3, warning = FALSE}
+#plot(p.ilch)
+#saveRDS(p.ilch, "pilch.rds")
+p.ilch<-readRDS("./predation_data/predation_models/pilch.rds")
+precis(p.ilch, depth = 2, prob = 0.95)
+plot(precis(p.ilch))
+```
+
+```{r}
+logistic(-0.53 + 0.49 + 0.05 + -0.07)  # without cage = 0.36
+logistic(-0.53 + 0.49 + -2.05 + 0.05 + -0.07)  #with cage = 0.069
+```
+
+
+```{r}
+p.ilch1 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bcage*cage + bTPFxcage*TPF*cage + 
+      bseminat*seminat_c + bcagexseminat*(cage*seminat_c),
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1),
+    bcage ~ dnorm(0,1),
+    bTPFxcage ~ dnorm(0,1),
+    bseminat ~ dnorm(0,1),
+    bcagexseminat ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+```
+
+```{r}
+#plot(p.ilch1)
+#saveRDS(p.ilch1, "pilch1.rds")
+p.ilch1<-readRDS("./predation_data/predation_models/pilch1.rds")
+precis(p.ilch1, depth = 2, prob = 0.95)
+plot(precis(p.ilch1))
+WAIC(p.ilch1)
+```
+
+```{r}
+p.ilch2 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bcage*cage + bTPFxcage*TPF*cage + bhab*hab +
+      bseminat*seminat_c + bhabxseminat*(hab*seminat_c),
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1),
+    bcage ~ dnorm(0,1),
+    bTPFxcage ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    bseminat ~ dnorm(0,1),
+    bhabxseminat ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+```
+
+```{r}
+#plot(p.ilch2)
+#saveRDS(p.ilch2, "pilch2.rds")
+p.ilch2<-readRDS("./predation_data/predation_models/pilch2.rds")
+precis(p.ilch2, depth = 2, prob = 0.95)
+plot(precis(p.ilch2))
+```
+
+```{r}
+p.ilch3 <- map2stan(
+  alist(
+    pred ~ dbinom(1,p),
+    logit(p) <- a + a_orch[orch] + bTPF*TPF + bcage*cage + bTPFxcage*TPF*cage + bloc*loc +
+      bseminat*seminat_c + blocxseminat*(loc*seminat_c),
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bTPF ~ dnorm(0,1),
+    bcage ~ dnorm(0,1),
+    bTPFxcage ~ dnorm(0,1),
+    bloc ~ dnorm(0,1),
+    bseminat ~ dnorm(0,1),
+    blocxseminat ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = dstan, warmup = 1000, iter=4000, chains = 3, cores = 2) 
+```
+
+```{r}
+#plot(p.ilch3)
+#saveRDS(p.ilch3, "pilch3.rds")
+p.ilch3<-readRDS("./predation_data/predation_models/pilch3.rds")
+precis(p.ilch3, depth = 2, prob = 0.95)
+plot(precis(p.ilch3))
+```
+
+**Appendix S2:Table S4**
+
+```{r}
+cage.ilch.models.WAIC <- compare(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, p0.t, p1.t, p2.t, p3.t, p4.t, p5.t, p6.t, p7.t, p8.t, p9.t, p10.t, p11.t, p12.t, p13.t, p14.t, p15.t, p16.t, p17.t, p18.t, p.ilch, p.ilch1, p.ilch2, p.ilch3)
+
+cage.ilch.models.WAIC
+```
+
+**Appendix S2:Table S5**
+```{r}
+#saveRDS(cage.ilch.models.WAIC, "cage.ilch.models.WAIC.rds")
+write.table(cage.ilch.models.WAIC@output, "clipboard", sep="\t", row.names=TRUE)
+```
+
+Plot, validate, predict, and plot
+
+No need for ensemble because top model carried 100% of weight and by far outperformed other models, but let's see how it performs.
+```{r, warning=FALSE, comment=FALSE, fig.width=5, fig.height =3}
+pilch1<-readRDS("./predation_data/predation_models/pilch1.rds")
+precis(pilch1); plot(precis(pilch1))
+
+pilch1precis<-precis(pilch1, depth=2, prob=0.95)
+write.table(pilch1precis@output, "clipboard", sep="\t", row.names=TRUE)
+```
+
+Posterior predictions for same clusters. Check posterior against emperical
+
+Because of partial pooling, we should no longer expect the posterior predictive distribution to math the raw data even if the model worked correctly(i.e., the estimates should not necessarily match up with the raw data; McElreath 377 and 301).
+
+```{r}
+pilch1<-readRDS("./predation_data/predation_models/pilch1.rds")
+precis(pilch1, prob=0.95)
+```
+
+```{r}
+orch <- c(1:20)
+
+p <- by(dstan$pred, 
+        list(TPF=dstan$TPF, cage=dstan$cage, orch=dstan$orch), function(x) mean(x)) 
+
+orch.pred <- list(
+    TPF = rep(c(0,1,0,1), 20),   # noTPF/TPF/noTPF/TPF 
+    cage = rep(c(0,0,1,1),20),
+    seminat_c = rep(mean(seminat_c.seq),80),
+    orch = rep(orch,each = 4))
+
+orch.link<- link(pilch1, n=2000, data = orch.pred)
+
+pred.p <- apply( orch.link , 2 , mean ) 
+pred.p.pi <- apply( orch.link , 2 , PI ) 
+```
+
+```{r, fig.width=5, fig.height=5}
+pred.p.list<-array(pred.p, c(4,20)) 
+pred.p.pi.list<-array(pred.p.pi, c(2,4,20)) 
+
+for (i in orch) {
+plot( 0 , 0 , type="n" , xlab="cage/TPF" ,
+    ylab="Proportion predated" , ylim=c(0,1) , xaxt="n" ,
+    xlim=c(1,4) , yaxp=c(0,1,2) )
+axis( 1 , at=1:4 , labels=c("nocage/noTPF","nocage/TPF","cage/noTPF","cage/TPF") )
+mtext( paste( "Orchard" , orch[i]) )
+  
+lines( 1:4 , as.vector(p[,,orch[i]]) , col=rangi2 , lwd=2 ) 
+lines( 1:4 , pred.p.list[,i] )
+shade( pred.p.pi.list[,,i] , 1:4 )
+}
+```
+Great for 10 orchards, ok for 2, poor for 8. 
+
+**Area under the ROC**
+```{r}
+linkFINALraw <-link(pilch1)
+#saveRDS(linkFINALraw, "linkFINALraw.rds")
+
+mu.mean<-apply(linkFINALraw, 2, mean)
+mu.pi<-apply(linkFINALraw, 2, PI)
+```
+
+Compute AUC
+```{r, eval =FALSE}
+F.ROC_caged.pred <- roc(dstan$pred, mu.mean, auc=TRUE, ci=TRUE, ci.method="bootstrap")
+F.ROC_caged.pred.smooth <- roc(dstan$pred, mu.mean, auc=TRUE, smooth=TRUE, ci=TRUE, ci.method="bootstrap")
+F.ROC_caged.pred.smooth
+#saveRDS(F.ROC_caged.pred, "F.ROC_caged.pred.rds")
+#saveRDS(F.ROC_caged.pred.smooth, "F.ROC_caged.pred.smooth.rds")
+```
+
+```{r, fig.height=5, fig.width=5, warning=FALSE}
+plot(F.ROC_caged.pred.smooth, col=skhpal[5], lwd=3, main="caged predation model")
+```
+
+```{r}
+obs.pred <- dstan %>%
+  mutate(n=1) %>%
+  group_by(orch, cage, TPF) %>%
+  summarize(seminat_c = mean(seminat_c),
+            obs.prop = sum(pred)/sum(n))
+
+dim(obs.pred); obs.pred
+```
+
+```{r}
+linktest <-link(pilch1, data = obs.pred)
+mu.mean<-apply(linktest, 2, mean)
+mu.pi<-apply(linktest, 2, PI)
+```
+
+```{r, warning=FALSE, fig.height=3, fig.width=3}
+plot(mu.mean~obs.pred$obs.prop, col="slateblue", ylim=range(0:1), xlab = "Observed predation", ylab ="Predicted predation")
+abline(a=0,b=1,lty=2)
+cor(mu.mean,obs.pred$obs.prop) #0.8131312
+```
+So, does a pretty decent job of retrodicting the observations. Better at lower levels of observed predation, and underpredicts predation at higher observed levels.
+
+
+Construct posterior predictions for an "average" orchard, ignoring variation among orchards (McElreath p. 378)
+
+**Figure 4: cage x TPF plot and cage x seminatural cover plot**
+
+Figure 4A
+
+CagexTPF posterior predictions
+```{r, eval=FALSE}
+cage.tpf.df <-list( 
+  cage = c(0,0,1,1),   #no cage, no cage, cage, cage   
+  TPF = c(0,1,0,1),    #no TPF, TPF, no TPF, TPF
+  seminat_c = rep(mean(seminat_c.seq),4),
+  orch = rep(2,4)     # placeholder
+)
+
+# create the "average" orchard (i.e., intercept of 0)
+# replace varying intercept samples with zeros; 1000 samples by 20 orchards
+a_orch_zeros<-matrix(0,2000,20)
+
+# posterior predictions for nocage.noTPF from model averaging the four models with WAIC weights > 0.00
+cageTPF.pred.link<- link(pilch1, n=2000, data = cage.tpf.df, replace=list(a_orch = a_orch_zeros))
+
+#saveRDS(cageTPF.pred.link, file="cageTPF.pred.link.rds")
+
+#cageTPF.pred.link<-readRDS("cageTPF.pred.link.rds")
+
+cage <- c("No cage", "No cage", "Cage", "Cage")
+TPF<-c("No same tree predation","Same tree predation","No same tree predation","Same tree predation")
+median <- c(NA,NA,NA,NA)
+mean <- c(NA,NA,NA,NA)
+sd <- c(NA,NA,NA,NA)
+lo <- c(NA,NA,NA,NA)
+hi <- c(NA,NA,NA,NA)
+
+df<-data.frame(cage, TPF, median, mean, sd, lo, hi)
+df$cage <- as.factor(df$cage)
+df$TPF <- as.factor(df$TPF)
+rm(cage, TPF, median, mean, sd, lo, hi)
+
+df[,3] <- apply(cageTPF.pred.link, 2, median)
+df[,4] <- apply(cageTPF.pred.link, 2, mean)
+df[,5] <- apply(cageTPF.pred.link, 2, sd)
+df[,6] <- apply(cageTPF.pred.link, 2, PI, prob = 0.95)[1,]
+df[,7] <- apply(cageTPF.pred.link, 2, PI, prob = 0.95)[2,]
+df
+
+#saveRDS(df, "Fig4A_pred.rds")
+```
+
+```{r}
+df<- readRDS("./predation_data/predation_models/Fig4A_pred.rds")
+```
+
+```{r, FIG.cage.TPF, warning=FALSE, echo=FALSE,fig.width=6, fig.height=6, fig.align='center'}
+FIG.cage.TPF <-
+ggplot(df, aes(x=cage, y=mean, group = TPF)) +
+  geom_crossbar(position=position_dodge(0.25), aes(ymin = mean-sd, ymax = mean+sd, fill=cage), 
+                width = 0.15, alpha = 0.5) +
+  scale_fill_manual(values= skhpal[c(11,7)])+
+  geom_errorbar(position=position_dodge(0.25), width=.1,  aes(ymin=lo, ymax=hi)) +
+  geom_line(position=position_dodge(0.25),aes(linetype=TPF), lwd=1) + 
+  scale_linetype_manual(values=c("solid", "dashed" ),
+                        breaks =c("Same tree predation", "No same tree predation"))+ #reverse order legend
+  xlab(NULL) +
+  ylim(0,1.00) + 
+  theme_classic() +
+  theme(legend.position = c(0.50, 0.93),
+        legend.key.height = unit(10,"mm"), 
+        legend.key.width = unit(15,"mm"), 
+        legend.key=element_blank(),
+        legend.title=element_blank(),
+        legend.text=element_text(size=18)) +
+  guides(fill=FALSE,color=FALSE) +
+  guides(linetype = guide_legend(override.aes = list(lwd=1.5))) +
+  theme(axis.ticks.length = unit(1,"mm"),
+        axis.text.y = element_text(size=18, colour=skhpal[1]), 
+        axis.title.y = element_text(size = 20, margin = margin(t = 0, r = 7, b = 0, l = 0)),
+        axis.text.x = element_text(size=20, colour=skhpal[1]),
+        axis.title.x = element_blank(), 
+        plot.margin = unit(c(0.1,0.1,0.1,0.1),"cm"), 
+        plot.tag.position = c(0.20, 0.97),
+        plot.tag = element_text(size=20)) +
+  labs(x = " ", y="Predation probability", tag = "A")
+
+FIG.cage.TPF
+
+#saveRDS(FIG.cage.TPF, "FIG.cage.TPF.rds")
+```
+
+Figure 4A
+
+Cage x seminatural cover predictions
+```{r, eval=FALSE}
+#New data frames for prediction 
+nocage_noTPF<-list( 
+  cage = rep(c(0), each=100), 
+  TPF = rep(c(0), each=100),   
+  seminat_c = seminat_c.seq,
+  orch = rep(2,100) # placeholder
+)
+
+nocage_TPF <-list( 
+  cage = rep(c(0), each=100), 
+  TPF = rep(c(1), each=100),   
+  seminat_c = seminat_c.seq,
+  orch = rep(2,100) # placeholder
+)
+
+cage_noTPF <-list( 
+  cage = rep(c(1), each=100), 
+  TPF = rep(c(0), each=100),   
+  seminat_c = seminat_c.seq,
+  orch = rep(2,100) # placeholder
+)
+
+cage_TPF <-list( 
+  cage = rep(c(1), each=100), 
+  TPF = rep(c(1), each=100),   
+  seminat_c = seminat_c.seq,
+  orch = rep(2,100) # placeholder
+)
+
+# Predictions for an "average" orchard
+a_orch_zeros<-matrix(0,2000,20)
+
+nocage_notpf.link<-link(pilch1, n=2000, data = nocage_noTPF, replace=list(a_orch = a_orch_zeros))
+nocage_tpf.link<-link(pilch1, n=2000, data = nocage_TPF, replace=list(a_orch = a_orch_zeros))
+cage_notpf.link<-link(pilch1, n=2000, data = cage_noTPF , replace=list(a_orch = a_orch_zeros))
+cage_tpf.link<-link(pilch1, n=2000, data = cage_TPF, replace=list(a_orch = a_orch_zeros))
+
+#saveRDS(nocage_notpf.link, "nocage_notpf.link.rds")
+#saveRDS(nocage_tpf.link, "nocage_tpf.link.rds")
+#saveRDS(cage_notpf.link, "cage_notpf.link.rds")
+#saveRDS(cage_tpf.link, "cage_tpf.link.rds")
+```
+
+```{r}
+nocage_notpf.pred.mean <- apply(nocage_notpf.link, 2, mean)
+nocage_notpf.pred.PI <- apply(nocage_notpf.link, 2, PI, prob = 0.95)
+
+nocage_tpf.pred.mean <- apply(nocage_tpf.link, 2, mean)
+nocage_tpf.pred.PI <- apply(nocage_tpf.link, 2, PI, prob = 0.95)
+
+cage_notpf.pred.mean <- apply(cage_notpf.link, 2, mean)
+cage_notpf.pred.PI <- apply(cage_notpf.link, 2, PI, prob = 0.95)
+
+cage_tpf.pred.mean <- apply(cage_tpf.link, 2, mean)
+cage_tpf.pred.PI <- apply(cage_tpf.link, 2, PI, prob = 0.95)
+
+#ggplot2 dataframe
+
+#seminat_c.seq
+#range(pstan$r5seminat) #0.04 38.04
+#seminat.seq<- seq(0.04, 38.04, length.out=100)
+
+cage<-"No cage"
+TPF<-"No same tree predation"
+pred<-nocage_notpf.pred.mean
+lo<-nocage_notpf.pred.PI[1,]
+hi<-nocage_notpf.pred.PI[2,]
+nocage_notpf<-data.frame(cage, TPF, seminat_c.seq, seminat.seq, pred, lo, hi)
+
+cage<-"No cage"
+TPF<-"Same tree predation"
+pred<-nocage_tpf.pred.mean
+lo<-nocage_tpf.pred.PI[1,]
+hi<-nocage_tpf.pred.PI[2,]
+nocage_tpf<-data.frame(cage, TPF, seminat_c.seq, seminat.seq, pred, lo, hi)
+
+cage<-"Cage"
+TPF<-"No same tree predation"
+pred<-cage_notpf.pred.mean
+lo<-cage_notpf.pred.PI[1,]
+hi<-cage_notpf.pred.PI[2,]
+cage_notpf<-data.frame(data.frame(cage, TPF, seminat_c.seq, seminat.seq, pred, lo, hi))
+
+cage<-"Cage"
+TPF<-"Same tree predation"
+pred<-cage_tpf.pred.mean
+lo<-cage_tpf.pred.PI[1,]
+hi<-cage_tpf.pred.PI[2,]
+cage_tpf<-data.frame(data.frame(cage, TPF, seminat_c.seq, seminat.seq, pred, lo, hi))
+
+plot.df<-rbind(cage_notpf,cage_tpf,nocage_notpf,nocage_tpf)
+plot.df$cage<-as.factor(plot.df$cage)
+plot.df$TPF<-as.factor(plot.df$TPF)
+
+plot.df<-rbind(cage_notpf,nocage_notpf) #hold TPF constant at zero (really not much difference in this graph)
+
+#write.csv(plot.df, "Fig4B_pred.csv")
+```
+
+```{r}
+df1<-read.csv("./predation_data/predation_models/Fig4B_pred.csv")
+```
+
+```{r,fig.width=6, fig.height=6, warning=FALSE}
+seminatcagetpfFIG<-
+  ggplot(df1, aes(x=seminat.seq, y=pred, group=linecat)) +
+  geom_ribbon(aes(x=seminat.seq, ymin = lo, ymax = hi, fill=linecat), alpha=0.50) +
+  scale_fill_manual(values=skhpal[c(11,11, 7,7)],
+                    breaks=c("nocagenoTPF","cagenoTPF"), #reverse order, remove 2 factors from legend
+                    labels=c("No cage","Cage")) + # rename legend items
+  geom_line(aes(x=seminat.seq, y=pred, col=linecat, linetype=linecat), size = 1.5) +
+  scale_color_manual(values=skhpal[c(10,10, 9,9)]) +
+  scale_linetype_manual(values=c("solid", "dashed", "solid" , "dashed" )) +
+  ylim(0,1) +
+  #xlim(0,38) +
+  theme_classic() +
+  theme(legend.position = c(0.28, 0.93), legend.key = element_rect(size = 2, color="white"),
+        legend.key.size=unit(8,"mm"), legend.title=element_blank(), legend.text=element_text(size=18)) +
+  guides(linetype=FALSE, color=FALSE) +
+  guides(fill = guide_legend(override.aes = list(alpha=1, fill = skhpal[c(9,10)]))) +
+  theme(axis.ticks.length = unit(1,"mm"),
+        axis.text.y = element_text(size=18, colour=skhpal[1]), 
+        axis.title.y = element_text(size = 20, margin = margin(t = 0, r = 7, b = 0, l = 0)),
+        axis.text.x = element_text(size=18, colour=skhpal[1]),
+        axis.title.x = element_text(size=20, colour=skhpal[1]), 
+        plot.margin = unit(c(0.1,0.1,0.1,0.1),"cm"), 
+        plot.tag.position = c(0.20, 0.97),
+        plot.tag = element_text(size=20)) +
+  labs(x = "Seminatural landscape cover (%)", y="Predation probability", tag = "B")
+
+seminatcagetpfFIG
+#saveRDS(seminatcagetpfFIG, "seminatcagetpfFIG.rds")
+```
+
+Combind the two cage predation plots
+```{r,fig.width=6, fig.height=10, warning=FALSE}
+Cage_predation_combined_FIG<-
+  plot_grid(FIG.cage.TPF,NULL, seminatcagetpfFIG, 
+            align='v', ncol = 1,
+            rel_widths = c(1, 1, 1),
+            rel_heights = c(1, 0.05, 1))
+Cage_predation_combined_FIG
+#saveRDS(Cage_predation_combined_FIG, "Cage_predation_combined_FIG.rds") 
+```
+
+Export
+```{r, eval=FALSE, warning=FALSE}
+tiff("Figure 4.tiff", width = 6, height = 10, units = 'in',res=600)
+Cage_predation_combined_FIG
+dev.off()
+
+cairo_pdf(file = "Figure 4.pdf", width = 6, height = 10) #embeds fonts
+Cage_predation_combined_FIG
+dev.off()
+```

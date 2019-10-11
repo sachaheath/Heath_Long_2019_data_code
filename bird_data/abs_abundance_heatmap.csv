@@ -1,0 +1,401 @@
+specorder,order,Sites,site,trantype,Species,MA
+1,1,M1,1,Margin transects,Acorn Woodpecker,0
+1,2,M2,2,Margin transects,Acorn Woodpecker,0
+1,3,M3,3,Margin transects,Acorn Woodpecker,0
+1,4,M4,4,Margin transects,Acorn Woodpecker,0
+1,5,M5,5,Margin transects,Acorn Woodpecker,0
+1,6,M6,6,Margin transects,Acorn Woodpecker,0
+1,7,M7,7,Margin transects,Acorn Woodpecker,0
+1,8,M8,8,Margin transects,Acorn Woodpecker,0
+1,9,M9,9,Margin transects,Acorn Woodpecker,0
+1,10,M10,10,Margin transects,Acorn Woodpecker,0
+1,11,M11,11,Margin transects,Acorn Woodpecker,0
+1,12,M12,12,Margin transects,Acorn Woodpecker,0
+1,13,M13,13,Margin transects,Acorn Woodpecker,0
+1,14,M14,14,Margin transects,Acorn Woodpecker,0
+1,15,M15,15,Margin transects,Acorn Woodpecker,0
+1,16,M16,16,Margin transects,Acorn Woodpecker,0
+1,17,M17,17,Margin transects,Acorn Woodpecker,1
+1,18,M18,18,Margin transects,Acorn Woodpecker,0
+1,19,M19,19,Margin transects,Acorn Woodpecker,0
+1,20,M20,20,Margin transects,Acorn Woodpecker,0
+1,21,I1,1,Interior transects,Acorn Woodpecker,0
+1,22,I2,2,Interior transects,Acorn Woodpecker,0
+1,23,I3,3,Interior transects,Acorn Woodpecker,0
+1,24,I4,4,Interior transects,Acorn Woodpecker,0
+1,25,I5,5,Interior transects,Acorn Woodpecker,0
+1,26,I6,6,Interior transects,Acorn Woodpecker,0
+1,27,I7,7,Interior transects,Acorn Woodpecker,0
+1,28,I8,8,Interior transects,Acorn Woodpecker,0
+1,29,I9,9,Interior transects,Acorn Woodpecker,0
+1,30,I10,10,Interior transects,Acorn Woodpecker,0
+1,31,I11,11,Interior transects,Acorn Woodpecker,0
+1,32,I12,12,Interior transects,Acorn Woodpecker,0
+1,33,I13,13,Interior transects,Acorn Woodpecker,0
+1,34,I14,14,Interior transects,Acorn Woodpecker,0
+1,35,I15,15,Interior transects,Acorn Woodpecker,0
+1,36,I16,16,Interior transects,Acorn Woodpecker,0
+1,37,I17,17,Interior transects,Acorn Woodpecker,0
+1,38,I18,18,Interior transects,Acorn Woodpecker,0
+1,39,I19,19,Interior transects,Acorn Woodpecker,0
+1,40,I20,20,Interior transects,Acorn Woodpecker,0
+2,41,M1,1,Margin transects,Bewick's Wren,1
+2,42,M2,2,Margin transects,Bewick's Wren,0
+2,43,M3,3,Margin transects,Bewick's Wren,0
+2,44,M4,4,Margin transects,Bewick's Wren,0
+2,45,M5,5,Margin transects,Bewick's Wren,0
+2,46,M6,6,Margin transects,Bewick's Wren,0
+2,47,M7,7,Margin transects,Bewick's Wren,0
+2,48,M8,8,Margin transects,Bewick's Wren,0
+2,49,M9,9,Margin transects,Bewick's Wren,1
+2,50,M10,10,Margin transects,Bewick's Wren,0
+2,51,M11,11,Margin transects,Bewick's Wren,2
+2,52,M12,12,Margin transects,Bewick's Wren,0
+2,53,M13,13,Margin transects,Bewick's Wren,0
+2,54,M14,14,Margin transects,Bewick's Wren,0
+2,55,M15,15,Margin transects,Bewick's Wren,0
+2,56,M16,16,Margin transects,Bewick's Wren,0
+2,57,M17,17,Margin transects,Bewick's Wren,1
+2,58,M18,18,Margin transects,Bewick's Wren,0
+2,59,M19,19,Margin transects,Bewick's Wren,1
+2,60,M20,20,Margin transects,Bewick's Wren,0
+2,61,I1,1,Interior transects,Bewick's Wren,0
+2,62,I2,2,Interior transects,Bewick's Wren,0
+2,63,I3,3,Interior transects,Bewick's Wren,0
+2,64,I4,4,Interior transects,Bewick's Wren,0
+2,65,I5,5,Interior transects,Bewick's Wren,0
+2,66,I6,6,Interior transects,Bewick's Wren,0
+2,67,I7,7,Interior transects,Bewick's Wren,0
+2,68,I8,8,Interior transects,Bewick's Wren,0
+2,69,I9,9,Interior transects,Bewick's Wren,0
+2,70,I10,10,Interior transects,Bewick's Wren,0
+2,71,I11,11,Interior transects,Bewick's Wren,0
+2,72,I12,12,Interior transects,Bewick's Wren,0
+2,73,I13,13,Interior transects,Bewick's Wren,0
+2,74,I14,14,Interior transects,Bewick's Wren,0
+2,75,I15,15,Interior transects,Bewick's Wren,0
+2,76,I16,16,Interior transects,Bewick's Wren,0
+2,77,I17,17,Interior transects,Bewick's Wren,0
+2,78,I18,18,Interior transects,Bewick's Wren,0
+2,79,I19,19,Interior transects,Bewick's Wren,0
+2,80,I20,20,Interior transects,Bewick's Wren,0
+3,81,M1,1,Margin transects,Bushtit,5
+3,82,M2,2,Margin transects,Bushtit,0
+3,83,M3,3,Margin transects,Bushtit,3
+3,84,M4,4,Margin transects,Bushtit,0
+3,85,M5,5,Margin transects,Bushtit,0
+3,86,M6,6,Margin transects,Bushtit,0
+3,87,M7,7,Margin transects,Bushtit,0
+3,88,M8,8,Margin transects,Bushtit,0
+3,89,M9,9,Margin transects,Bushtit,1
+3,90,M10,10,Margin transects,Bushtit,0
+3,91,M11,11,Margin transects,Bushtit,0
+3,92,M12,12,Margin transects,Bushtit,0
+3,93,M13,13,Margin transects,Bushtit,6
+3,94,M14,14,Margin transects,Bushtit,0
+3,95,M15,15,Margin transects,Bushtit,13
+3,96,M16,16,Margin transects,Bushtit,0
+3,97,M17,17,Margin transects,Bushtit,0
+3,98,M18,18,Margin transects,Bushtit,0
+3,99,M19,19,Margin transects,Bushtit,0
+3,100,M20,20,Margin transects,Bushtit,0
+3,101,I1,1,Interior transects,Bushtit,0
+3,102,I2,2,Interior transects,Bushtit,0
+3,103,I3,3,Interior transects,Bushtit,0
+3,104,I4,4,Interior transects,Bushtit,0
+3,105,I5,5,Interior transects,Bushtit,0
+3,106,I6,6,Interior transects,Bushtit,0
+3,107,I7,7,Interior transects,Bushtit,0
+3,108,I8,8,Interior transects,Bushtit,0
+3,109,I9,9,Interior transects,Bushtit,0
+3,110,I10,10,Interior transects,Bushtit,0
+3,111,I11,11,Interior transects,Bushtit,0
+3,112,I12,12,Interior transects,Bushtit,0
+3,113,I13,13,Interior transects,Bushtit,0
+3,114,I14,14,Interior transects,Bushtit,0
+3,115,I15,15,Interior transects,Bushtit,0
+3,116,I16,16,Interior transects,Bushtit,0
+3,117,I17,17,Interior transects,Bushtit,0
+3,118,I18,18,Interior transects,Bushtit,0
+3,119,I19,19,Interior transects,Bushtit,0
+3,120,I20,20,Interior transects,Bushtit,0
+4,121,M1,1,Margin transects,Hermit Thrush,0
+4,122,M2,2,Margin transects,Hermit Thrush,0
+4,123,M3,3,Margin transects,Hermit Thrush,0
+4,124,M4,4,Margin transects,Hermit Thrush,0
+4,125,M5,5,Margin transects,Hermit Thrush,0
+4,126,M6,6,Margin transects,Hermit Thrush,0
+4,127,M7,7,Margin transects,Hermit Thrush,0
+4,128,M8,8,Margin transects,Hermit Thrush,0
+4,129,M9,9,Margin transects,Hermit Thrush,0
+4,130,M10,10,Margin transects,Hermit Thrush,0
+4,131,M11,11,Margin transects,Hermit Thrush,0
+4,132,M12,12,Margin transects,Hermit Thrush,0
+4,133,M13,13,Margin transects,Hermit Thrush,0
+4,134,M14,14,Margin transects,Hermit Thrush,0
+4,135,M15,15,Margin transects,Hermit Thrush,0
+4,136,M16,16,Margin transects,Hermit Thrush,0
+4,137,M17,17,Margin transects,Hermit Thrush,1
+4,138,M18,18,Margin transects,Hermit Thrush,0
+4,139,M19,19,Margin transects,Hermit Thrush,0
+4,140,M20,20,Margin transects,Hermit Thrush,0
+4,141,I1,1,Interior transects,Hermit Thrush,0
+4,142,I2,2,Interior transects,Hermit Thrush,0
+4,143,I3,3,Interior transects,Hermit Thrush,0
+4,144,I4,4,Interior transects,Hermit Thrush,0
+4,145,I5,5,Interior transects,Hermit Thrush,0
+4,146,I6,6,Interior transects,Hermit Thrush,0
+4,147,I7,7,Interior transects,Hermit Thrush,0
+4,148,I8,8,Interior transects,Hermit Thrush,0
+4,149,I9,9,Interior transects,Hermit Thrush,0
+4,150,I10,10,Interior transects,Hermit Thrush,0
+4,151,I11,11,Interior transects,Hermit Thrush,0
+4,152,I12,12,Interior transects,Hermit Thrush,0
+4,153,I13,13,Interior transects,Hermit Thrush,0
+4,154,I14,14,Interior transects,Hermit Thrush,0
+4,155,I15,15,Interior transects,Hermit Thrush,0
+4,156,I16,16,Interior transects,Hermit Thrush,0
+4,157,I17,17,Interior transects,Hermit Thrush,1
+4,158,I18,18,Interior transects,Hermit Thrush,0
+4,159,I19,19,Interior transects,Hermit Thrush,0
+4,160,I20,20,Interior transects,Hermit Thrush,0
+5,161,M1,1,Margin transects,Northern Flicker,1
+5,162,M2,2,Margin transects,Northern Flicker,0
+5,163,M3,3,Margin transects,Northern Flicker,1
+5,164,M4,4,Margin transects,Northern Flicker,0
+5,165,M5,5,Margin transects,Northern Flicker,0
+5,166,M6,6,Margin transects,Northern Flicker,1
+5,167,M7,7,Margin transects,Northern Flicker,0
+5,168,M8,8,Margin transects,Northern Flicker,0
+5,169,M9,9,Margin transects,Northern Flicker,0
+5,170,M10,10,Margin transects,Northern Flicker,0
+5,171,M11,11,Margin transects,Northern Flicker,2
+5,172,M12,12,Margin transects,Northern Flicker,1
+5,173,M13,13,Margin transects,Northern Flicker,1
+5,174,M14,14,Margin transects,Northern Flicker,0
+5,175,M15,15,Margin transects,Northern Flicker,1
+5,176,M16,16,Margin transects,Northern Flicker,0
+5,177,M17,17,Margin transects,Northern Flicker,1
+5,178,M18,18,Margin transects,Northern Flicker,2
+5,179,M19,19,Margin transects,Northern Flicker,0
+5,180,M20,20,Margin transects,Northern Flicker,0
+5,181,I1,1,Interior transects,Northern Flicker,0
+5,182,I2,2,Interior transects,Northern Flicker,0
+5,183,I3,3,Interior transects,Northern Flicker,1
+5,184,I4,4,Interior transects,Northern Flicker,0
+5,185,I5,5,Interior transects,Northern Flicker,0
+5,186,I6,6,Interior transects,Northern Flicker,0
+5,187,I7,7,Interior transects,Northern Flicker,1
+5,188,I8,8,Interior transects,Northern Flicker,1
+5,189,I9,9,Interior transects,Northern Flicker,3
+5,190,I10,10,Interior transects,Northern Flicker,1
+5,191,I11,11,Interior transects,Northern Flicker,2
+5,192,I12,12,Interior transects,Northern Flicker,3
+5,193,I13,13,Interior transects,Northern Flicker,0
+5,194,I14,14,Interior transects,Northern Flicker,0
+5,195,I15,15,Interior transects,Northern Flicker,1
+5,196,I16,16,Interior transects,Northern Flicker,0
+5,197,I17,17,Interior transects,Northern Flicker,2
+5,198,I18,18,Interior transects,Northern Flicker,1
+5,199,I19,19,Interior transects,Northern Flicker,1
+5,200,I20,20,Interior transects,Northern Flicker,0
+6,201,M1,1,Margin transects,Nuttall's Woodpecker,1
+6,202,M2,2,Margin transects,Nuttall's Woodpecker,0
+6,203,M3,3,Margin transects,Nuttall's Woodpecker,1
+6,204,M4,4,Margin transects,Nuttall's Woodpecker,0
+6,205,M5,5,Margin transects,Nuttall's Woodpecker,0
+6,206,M6,6,Margin transects,Nuttall's Woodpecker,0
+6,207,M7,7,Margin transects,Nuttall's Woodpecker,0
+6,208,M8,8,Margin transects,Nuttall's Woodpecker,0
+6,209,M9,9,Margin transects,Nuttall's Woodpecker,1
+6,210,M10,10,Margin transects,Nuttall's Woodpecker,0
+6,211,M11,11,Margin transects,Nuttall's Woodpecker,1
+6,212,M12,12,Margin transects,Nuttall's Woodpecker,0
+6,213,M13,13,Margin transects,Nuttall's Woodpecker,2
+6,214,M14,14,Margin transects,Nuttall's Woodpecker,0
+6,215,M15,15,Margin transects,Nuttall's Woodpecker,1
+6,216,M16,16,Margin transects,Nuttall's Woodpecker,0
+6,217,M17,17,Margin transects,Nuttall's Woodpecker,3
+6,218,M18,18,Margin transects,Nuttall's Woodpecker,0
+6,219,M19,19,Margin transects,Nuttall's Woodpecker,3
+6,220,M20,20,Margin transects,Nuttall's Woodpecker,0
+6,221,I1,1,Interior transects,Nuttall's Woodpecker,1
+6,222,I2,2,Interior transects,Nuttall's Woodpecker,0
+6,223,I3,3,Interior transects,Nuttall's Woodpecker,0
+6,224,I4,4,Interior transects,Nuttall's Woodpecker,1
+6,225,I5,5,Interior transects,Nuttall's Woodpecker,0
+6,226,I6,6,Interior transects,Nuttall's Woodpecker,0
+6,227,I7,7,Interior transects,Nuttall's Woodpecker,0
+6,228,I8,8,Interior transects,Nuttall's Woodpecker,0
+6,229,I9,9,Interior transects,Nuttall's Woodpecker,0
+6,230,I10,10,Interior transects,Nuttall's Woodpecker,1
+6,231,I11,11,Interior transects,Nuttall's Woodpecker,1
+6,232,I12,12,Interior transects,Nuttall's Woodpecker,0
+6,233,I13,13,Interior transects,Nuttall's Woodpecker,1
+6,234,I14,14,Interior transects,Nuttall's Woodpecker,0
+6,235,I15,15,Interior transects,Nuttall's Woodpecker,0
+6,236,I16,16,Interior transects,Nuttall's Woodpecker,1
+6,237,I17,17,Interior transects,Nuttall's Woodpecker,1
+6,238,I18,18,Interior transects,Nuttall's Woodpecker,1
+6,239,I19,19,Interior transects,Nuttall's Woodpecker,0
+6,240,I20,20,Interior transects,Nuttall's Woodpecker,0
+7,241,M1,1,Margin transects,Oak Titmouse,0
+7,242,M2,2,Margin transects,Oak Titmouse,0
+7,243,M3,3,Margin transects,Oak Titmouse,0
+7,244,M4,4,Margin transects,Oak Titmouse,0
+7,245,M5,5,Margin transects,Oak Titmouse,0
+7,246,M6,6,Margin transects,Oak Titmouse,0
+7,247,M7,7,Margin transects,Oak Titmouse,0
+7,248,M8,8,Margin transects,Oak Titmouse,0
+7,249,M9,9,Margin transects,Oak Titmouse,0
+7,250,M10,10,Margin transects,Oak Titmouse,0
+7,251,M11,11,Margin transects,Oak Titmouse,0
+7,252,M12,12,Margin transects,Oak Titmouse,0
+7,253,M13,13,Margin transects,Oak Titmouse,0
+7,254,M14,14,Margin transects,Oak Titmouse,0
+7,255,M15,15,Margin transects,Oak Titmouse,0
+7,256,M16,16,Margin transects,Oak Titmouse,0
+7,257,M17,17,Margin transects,Oak Titmouse,4
+7,258,M18,18,Margin transects,Oak Titmouse,0
+7,259,M19,19,Margin transects,Oak Titmouse,0
+7,260,M20,20,Margin transects,Oak Titmouse,0
+7,261,I1,1,Interior transects,Oak Titmouse,0
+7,262,I2,2,Interior transects,Oak Titmouse,0
+7,263,I3,3,Interior transects,Oak Titmouse,0
+7,264,I4,4,Interior transects,Oak Titmouse,0
+7,265,I5,5,Interior transects,Oak Titmouse,0
+7,266,I6,6,Interior transects,Oak Titmouse,0
+7,267,I7,7,Interior transects,Oak Titmouse,0
+7,268,I8,8,Interior transects,Oak Titmouse,0
+7,269,I9,9,Interior transects,Oak Titmouse,0
+7,270,I10,10,Interior transects,Oak Titmouse,0
+7,271,I11,11,Interior transects,Oak Titmouse,0
+7,272,I12,12,Interior transects,Oak Titmouse,0
+7,273,I13,13,Interior transects,Oak Titmouse,0
+7,274,I14,14,Interior transects,Oak Titmouse,0
+7,275,I15,15,Interior transects,Oak Titmouse,0
+7,276,I16,16,Interior transects,Oak Titmouse,0
+7,277,I17,17,Interior transects,Oak Titmouse,1
+7,278,I18,18,Interior transects,Oak Titmouse,0
+7,279,I19,19,Interior transects,Oak Titmouse,0
+7,280,I20,20,Interior transects,Oak Titmouse,0
+8,281,M1,1,Margin transects,Red-breasted Sapsucker,0
+8,282,M2,2,Margin transects,Red-breasted Sapsucker,0
+8,283,M3,3,Margin transects,Red-breasted Sapsucker,0
+8,284,M4,4,Margin transects,Red-breasted Sapsucker,0
+8,285,M5,5,Margin transects,Red-breasted Sapsucker,0
+8,286,M6,6,Margin transects,Red-breasted Sapsucker,0
+8,287,M7,7,Margin transects,Red-breasted Sapsucker,0
+8,288,M8,8,Margin transects,Red-breasted Sapsucker,0
+8,289,M9,9,Margin transects,Red-breasted Sapsucker,0
+8,290,M10,10,Margin transects,Red-breasted Sapsucker,0
+8,291,M11,11,Margin transects,Red-breasted Sapsucker,0
+8,292,M12,12,Margin transects,Red-breasted Sapsucker,0
+8,293,M13,13,Margin transects,Red-breasted Sapsucker,0
+8,294,M14,14,Margin transects,Red-breasted Sapsucker,0
+8,295,M15,15,Margin transects,Red-breasted Sapsucker,0
+8,296,M16,16,Margin transects,Red-breasted Sapsucker,0
+8,297,M17,17,Margin transects,Red-breasted Sapsucker,1
+8,298,M18,18,Margin transects,Red-breasted Sapsucker,0
+8,299,M19,19,Margin transects,Red-breasted Sapsucker,1
+8,300,M20,20,Margin transects,Red-breasted Sapsucker,0
+8,301,I1,1,Interior transects,Red-breasted Sapsucker,0
+8,302,I2,2,Interior transects,Red-breasted Sapsucker,0
+8,303,I3,3,Interior transects,Red-breasted Sapsucker,0
+8,304,I4,4,Interior transects,Red-breasted Sapsucker,0
+8,305,I5,5,Interior transects,Red-breasted Sapsucker,0
+8,306,I6,6,Interior transects,Red-breasted Sapsucker,0
+8,307,I7,7,Interior transects,Red-breasted Sapsucker,0
+8,308,I8,8,Interior transects,Red-breasted Sapsucker,0
+8,309,I9,9,Interior transects,Red-breasted Sapsucker,0
+8,310,I10,10,Interior transects,Red-breasted Sapsucker,0
+8,311,I11,11,Interior transects,Red-breasted Sapsucker,0
+8,312,I12,12,Interior transects,Red-breasted Sapsucker,0
+8,313,I13,13,Interior transects,Red-breasted Sapsucker,0
+8,314,I14,14,Interior transects,Red-breasted Sapsucker,0
+8,315,I15,15,Interior transects,Red-breasted Sapsucker,0
+8,316,I16,16,Interior transects,Red-breasted Sapsucker,0
+8,317,I17,17,Interior transects,Red-breasted Sapsucker,0
+8,318,I18,18,Interior transects,Red-breasted Sapsucker,0
+8,319,I19,19,Interior transects,Red-breasted Sapsucker,0
+8,320,I20,20,Interior transects,Red-breasted Sapsucker,0
+9,321,M1,1,Margin transects,White-breasted Nuthatch,0
+9,322,M2,2,Margin transects,White-breasted Nuthatch,0
+9,323,M3,3,Margin transects,White-breasted Nuthatch,0
+9,324,M4,4,Margin transects,White-breasted Nuthatch,0
+9,325,M5,5,Margin transects,White-breasted Nuthatch,0
+9,326,M6,6,Margin transects,White-breasted Nuthatch,0
+9,327,M7,7,Margin transects,White-breasted Nuthatch,0
+9,328,M8,8,Margin transects,White-breasted Nuthatch,0
+9,329,M9,9,Margin transects,White-breasted Nuthatch,0
+9,330,M10,10,Margin transects,White-breasted Nuthatch,0
+9,331,M11,11,Margin transects,White-breasted Nuthatch,0
+9,332,M12,12,Margin transects,White-breasted Nuthatch,0
+9,333,M13,13,Margin transects,White-breasted Nuthatch,3
+9,334,M14,14,Margin transects,White-breasted Nuthatch,0
+9,335,M15,15,Margin transects,White-breasted Nuthatch,0
+9,336,M16,16,Margin transects,White-breasted Nuthatch,0
+9,337,M17,17,Margin transects,White-breasted Nuthatch,2
+9,338,M18,18,Margin transects,White-breasted Nuthatch,0
+9,339,M19,19,Margin transects,White-breasted Nuthatch,0
+9,340,M20,20,Margin transects,White-breasted Nuthatch,0
+9,341,I1,1,Interior transects,White-breasted Nuthatch,0
+9,342,I2,2,Interior transects,White-breasted Nuthatch,0
+9,343,I3,3,Interior transects,White-breasted Nuthatch,0
+9,344,I4,4,Interior transects,White-breasted Nuthatch,0
+9,345,I5,5,Interior transects,White-breasted Nuthatch,0
+9,346,I6,6,Interior transects,White-breasted Nuthatch,0
+9,347,I7,7,Interior transects,White-breasted Nuthatch,0
+9,348,I8,8,Interior transects,White-breasted Nuthatch,0
+9,349,I9,9,Interior transects,White-breasted Nuthatch,0
+9,350,I10,10,Interior transects,White-breasted Nuthatch,0
+9,351,I11,11,Interior transects,White-breasted Nuthatch,0
+9,352,I12,12,Interior transects,White-breasted Nuthatch,0
+9,353,I13,13,Interior transects,White-breasted Nuthatch,0
+9,354,I14,14,Interior transects,White-breasted Nuthatch,0
+9,355,I15,15,Interior transects,White-breasted Nuthatch,0
+9,356,I16,16,Interior transects,White-breasted Nuthatch,0
+9,357,I17,17,Interior transects,White-breasted Nuthatch,2
+9,358,I18,18,Interior transects,White-breasted Nuthatch,0
+9,359,I19,19,Interior transects,White-breasted Nuthatch,0
+9,360,I20,20,Interior transects,White-breasted Nuthatch,0
+10,361,M1,1,Margin transects,Yellow-billed Magpie,0
+10,362,M2,2,Margin transects,Yellow-billed Magpie,0
+10,363,M3,3,Margin transects,Yellow-billed Magpie,0
+10,364,M4,4,Margin transects,Yellow-billed Magpie,0
+10,365,M5,5,Margin transects,Yellow-billed Magpie,0
+10,366,M6,6,Margin transects,Yellow-billed Magpie,0
+10,367,M7,7,Margin transects,Yellow-billed Magpie,0
+10,368,M8,8,Margin transects,Yellow-billed Magpie,0
+10,369,M9,9,Margin transects,Yellow-billed Magpie,2
+10,370,M10,10,Margin transects,Yellow-billed Magpie,0
+10,371,M11,11,Margin transects,Yellow-billed Magpie,0
+10,372,M12,12,Margin transects,Yellow-billed Magpie,0
+10,373,M13,13,Margin transects,Yellow-billed Magpie,0
+10,374,M14,14,Margin transects,Yellow-billed Magpie,1
+10,375,M15,15,Margin transects,Yellow-billed Magpie,0
+10,376,M16,16,Margin transects,Yellow-billed Magpie,0
+10,377,M17,17,Margin transects,Yellow-billed Magpie,1
+10,378,M18,18,Margin transects,Yellow-billed Magpie,0
+10,379,M19,19,Margin transects,Yellow-billed Magpie,0
+10,380,M20,20,Margin transects,Yellow-billed Magpie,0
+10,381,I1,1,Interior transects,Yellow-billed Magpie,0
+10,382,I2,2,Interior transects,Yellow-billed Magpie,0
+10,383,I3,3,Interior transects,Yellow-billed Magpie,0
+10,384,I4,4,Interior transects,Yellow-billed Magpie,0
+10,385,I5,5,Interior transects,Yellow-billed Magpie,0
+10,386,I6,6,Interior transects,Yellow-billed Magpie,0
+10,387,I7,7,Interior transects,Yellow-billed Magpie,0
+10,388,I8,8,Interior transects,Yellow-billed Magpie,0
+10,389,I9,9,Interior transects,Yellow-billed Magpie,0
+10,390,I10,10,Interior transects,Yellow-billed Magpie,0
+10,391,I11,11,Interior transects,Yellow-billed Magpie,0
+10,392,I12,12,Interior transects,Yellow-billed Magpie,0
+10,393,I13,13,Interior transects,Yellow-billed Magpie,0
+10,394,I14,14,Interior transects,Yellow-billed Magpie,0
+10,395,I15,15,Interior transects,Yellow-billed Magpie,0
+10,396,I16,16,Interior transects,Yellow-billed Magpie,0
+10,397,I17,17,Interior transects,Yellow-billed Magpie,0
+10,398,I18,18,Interior transects,Yellow-billed Magpie,0
+10,399,I19,19,Interior transects,Yellow-billed Magpie,0
+10,400,I20,20,Interior transects,Yellow-billed Magpie,0
