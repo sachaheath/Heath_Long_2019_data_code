@@ -5,5 +5,5 @@ Zenodo publication: https://doi.org/10.5281/zenodo.3374039.
 
 .rds model output files not included here, but are accessible in the zenodo publication
 
-License: cc-by-4.0
-Creative Commons Attribution 4.0 
+License: Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)
+
