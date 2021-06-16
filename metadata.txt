@@ -1,0 +1,171 @@
+Heath_Long_2019_data_code 			# Rstudio Project and directory for code and analyses associated with 
+									# Heath, S.K. and R.F. Long. 2019. Multiscale habitat mediates pest reduction by birds in an intensive agricultural region. Ecosphere. DOI: 10.1002/ecs2.2884"
+
+./appendix_s1_tabs2_tabs4.Rmd				# Rstudio Notebook with code for walnut tree and margin vegetation PCA 
+./pca_data/									# PCA data directory subfolder where the following databases are stored
+localhab.csv								# Margin vegetation measurement data
+sentineltree.csv							# Sentinel walnut tree measurement data
+									
+./bird_analyses.Rmd					# Rstudio Notebook with code for bird species richness and abundance analyses
+./bird_data/						# Bird data directory subfolder where the following databases are stored				
+all_spp.csv							# table of all bird species detected at all distances, margins and interiors
+marginbirds_20m_n20.csv				# table of birds detected in 20x300 margin transects
+ibintbirds_20m_n20.csv				# table of birds detected in 20x300 interior transects
+intbirds_200m_n20.csv				# table of birds detected in 200x300 interior transects
+likelypredators.csv					# likely predator species foraging functional trait database
+abs_abundance_heatmap.csv			# Maximum abundance (across 3 visits) of likely predators for Figure 2
+marginbirds_20m_n60.csv 			# data for 20 x 300m margin detections by orchards and visits, n = 60
+likepred_SR_MARG_bootplot.csv 		# Rarefied richness output for 20 x 300m margin transects
+lpred.matrix.csv					# data for likely predators maximum abundance for 20m x 300m margin and interior transects
+lpred.site.data.matrix.csv			# Site data for likely predator maximum abundance matrix
+intbirds_200m_n60.csv				# data for 200m x 300m interior birds by orchards and 3 visits
+likepred_SR_INT_bootplot.csv		# Rarefied richness output for 200 x 300m margin transects
+woodpecker_models.csv				# orhard level data for woodpecker maximum abundance models from 200x300m interior transects
+tree_wood.pred.csv					# Posterior predictions of predation as a function of treepc1, others constant, from ensemble woodpecker models 
+seminat_wood.pred.csv				# Posterior predictions of predation as a function of seminatural cover, others constant, from ensemble woodpecker models
+mveg_wood.pred.csv					# Posterior predictions of predation as a function of marginvegpc1, others constant, from ensemble woodpecker models
+
+./predation_analyses.Rmd			# Rstudio Notebook with code for predation analyses (all cocoons)
+./predation_data/					# Predation data directory subfolder where the following databases are stored
+predation_covariates_d1994_anon.csv	# Predation experiment data and covariates for n = 1994 cocoons with known fate
+./predation_data/predation_models/	# Predation models subfolder where the following databases are stored (all cocoons)
+b0.rds 								# Binomial predation model output
+b1.rds 								# Binomial predation model output
+b2.rds  							# Binomial predation model output
+b3.rds  							# Binomial predation model output 
+b4.rds   							# Binomial predation model output
+b5.rds   							# Binomial predation model output
+b6.rds   							# Binomial predation model output
+b7.rds   							# Binomial predation model output
+b8.rds   							# Binomial predation model output
+b9.rds   							# Binomial predation model output
+b10.rds   							# Binomial predation model output
+b11.rds   							# Binomial predation model output
+b12.rds   							# Binomial predation model output
+b13.rds 							# Binomial predation model output
+bb0.rds								# Beta-Binomial predation model output							
+bt0.rds  							# Binomial predation model output
+ot10.rds							# Model for comparing nested variance structure
+p0.t.rds   							# Binomial predation model output
+p1.t.rds   							# Binomial predation model output
+p2.t.rds   							# Binomial predation model output
+p3.t.rds   							# Binomial predation model output
+p4.t.rds   							# Binomial predation model output
+p5.t.rds   							# Binomial predation model output
+p6.t.rds   							# Binomial predation model output
+p7.t.rds   							# Binomial predation model output
+p8.t.rds   							# Binomial predation model output
+p9.t.rds   							# Binomial predation model output
+p10.t.rds   						# Binomial predation model output
+p11.t.rds   						# Binomial predation model output
+p12.t.rds   						# Binomial predation model output 
+p13.t.rds    						# Binomial predation model output
+p14.t.rds    						# Binomial predation model output
+p15.t.rds    						# Binomial predation model output
+p16.t.rds   						# Binomial predation model output 
+p17.t.rds   						# Binomial predation model output 
+p18.t.rds   						# Binomial predation model output 
+p.ilch.rds   						# Binomial predation model output 
+p.ilch1.rds   						# Binomial predation model output 
+p.ilch2.rds   						# Binomial predation model output 
+p.ilch3.rds   						# Binomial predation model output
+Fig4A_pred.rds   					# Figure 4A pilch1.rds model posterior predictions
+Fig4B_pred.csv						# Figure 4B pilch1.rds model posterior predictions
+
+./predation_analyses_nocage.Rmd				# Rstudio Notebook with code for predation analyses (uncaged cocoons only)
+./predation_data/							# Predation data directory subfolder where the following databases are stored
+predation_covariates_d1994_anon.csv			# Predation experiment data and covariates for n = 1994 cocoons with known fate
+./predation_data/uncaged_predation_models/	# Uncaged redation models subfolder where the following databases are stored
+f0.rds										# Uncaged binomial predation model output 
+f1.rds										# Uncaged binomial predation model output  
+f1a.rds										# Uncaged binomial predation model output  
+f1b.rds										# Uncaged binomial predation model output  
+f1c.rds										# Uncaged binomial predation model output  
+f1d.rds										# Uncaged binomial predation model output  
+f2.rds										# Uncaged binomial predation model output  
+f3.rds										# Uncaged binomial predation model output  
+f4.rds										# Uncaged binomial predation model output  
+f4a.rds										# Uncaged binomial predation model output  
+f4b.rds										# Uncaged binomial predation model output  
+f4c.rds										# Uncaged binomial predation model output  
+f4d.rds										# Uncaged binomial predation model output  
+f4e.rds										# Uncaged binomial predation model output  
+f4f.rds										# Uncaged binomial predation model output  
+f4g.rds										# Uncaged binomial predation model output  
+f4h.rds										# Uncaged binomial predation model output  
+f4i.rds										# Uncaged binomial predation model output  
+f4j.rds										# Uncaged binomial predation model output  
+f5.rds										# Uncaged binomial predation model output  
+f5a.rds										# Uncaged binomial predation model output 
+f5b.rds										# Uncaged binomial predation model output 
+f5c.rds										# Uncaged binomial predation model output 
+f5d.rds										# Uncaged binomial predation model output 
+f5e.rds										# Uncaged binomial predation model output 
+f5f.rds										# Uncaged binomial predation model output 
+f5g.rds										# Uncaged binomial predation model output 
+f5h.rds 									# Uncaged binomial predation model output 
+f5i.rds										# Uncaged binomial predation model output  
+f5j.rds										# Uncaged binomial predation model output  
+f5k.rds										# Uncaged binomial predation model output  
+f5l.rds										# Uncaged binomial predation model output  
+f5m.rds										# Uncaged binomial predation model output  
+f6a.rds										# Uncaged binomial predation model output  
+f6a1.rds									# Uncaged binomial predation model output  
+f6a2.rds									# Uncaged binomial predation model output  
+f6a4.rds									# Uncaged binomial predation model output  
+f6a4a.rds									# Uncaged binomial predation model output  
+f6a5.rds									# Uncaged binomial predation model output  
+f6b.rds										# Uncaged binomial predation model output  
+f6b1.rds									# Uncaged binomial predation model output  
+f7.rds										# Uncaged binomial predation model output  
+f7a.rds										# Uncaged binomial predation model output  
+f7b.rds										# Uncaged binomial predation model output  
+f8a.rds										# Uncaged binomial predation model output  
+f8a1.rds									# Uncaged binomial predation model output  
+f8a2.rds									# Uncaged binomial predation model output  
+f8a3.rds									# Uncaged binomial predation model output  
+f8a4.rds									# Uncaged binomial predation model output  
+f8b.rds										# Uncaged binomial predation model output  
+f8b1.rds									# Uncaged binomial predation model output  
+f8b2.rds									# Uncaged binomial predation model output  
+f9.rds										# Uncaged binomial predation model output  
+f9a.rds										# Uncaged binomial predation model output  
+f9b.rds										# Uncaged binomial predation model output  
+f9c.rds										# Uncaged binomial predation model output  
+f9d.rds										# Uncaged binomial predation model output  
+f10a.rds									# Uncaged binomial predation model output  
+f10aa.rds									# Uncaged binomial predation model output  
+f10a1.rds									# Uncaged binomial predation model output  
+f10a2.rds									# Uncaged binomial predation model output  
+f10a3.rds										# Uncaged binomial predation model output  
+f10a4.rds										# Uncaged binomial predation model output  
+f10a5.rds										# Uncaged binomial predation model output  
+f10a6.rds										# Uncaged binomial predation model output  
+f10a7.rds										# Uncaged binomial predation model output  
+f10a8.rds										# Uncaged binomial predation model output  
+f10b.rds										# Uncaged binomial predation model output  
+f10bb.rds										# Uncaged binomial predation model output 
+f10b1.rds										# Uncaged binomial predation model output  
+f10b2.rds										# Uncaged binomial predation model output  
+f10b3.rds										# Uncaged binomial predation model output  
+f10b4.rds										# Uncaged binomial predation model output  
+f10b5.rds										# Uncaged binomial predation model output  
+f10b6.rds										# Uncaged binomial predation model output  
+f10b7.rds										# Uncaged binomial predation model output  
+f10b8.rds										# Uncaged binomial predation model output  
+f10c.rds										# Uncaged binomial predation model output  
+f10cc.rds										# Uncaged binomial predation model output  
+f10c1.rds										# Uncaged binomial predation model output  
+f10c2.rds										# Uncaged binomial predation model output  
+f10c3.rds										# Uncaged binomial predation model output  
+f10c4.rds										# Uncaged binomial predation model output  
+f10c5.rds										# Uncaged binomial predation model output  
+f10c6.rds										# Uncaged binomial predation model output  
+f10c7.rds										# Uncaged binomial predation model output  
+f10c8.rds										# Uncaged binomial predation model output 
+final_treepc1_pred_ensemble.rds				# Samples from ensemble of uncaged binomial predation models for Figure 5A
+final_e_orchloc_pred_ensemble.rds			# Samples from ensemble of uncaged binomial predation models for Figure 5B
+final_i_orchloc_pred_ensemble.rds			# Samples from ensemble of uncaged binomial predation models for Figure 5B
+final.cleared.pred_ensemble.rds				# Samples from ensemble of uncaged binomial predation models for Figure 6
+final.simple.pred_ensemble.rds				# Samples from ensemble of uncaged binomial predation models for Figure 6
+final.complex.pred_ensemble.rds				# Samples from ensemble of uncaged binomial predation models for Figure 6

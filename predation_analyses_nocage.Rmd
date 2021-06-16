@@ -1,0 +1,4079 @@
+---
+title: "Heath, S.K. and R.F. Long. 2019. Multiscale habitat mediates pest reduction by birds in an intensive agricultural region. Ecosphere. DOI: 10.1002/ecs2.2884"
+sub-title: "Predation models, (uncaged cocoons only)."
+author: "Sacha K. Heath"
+date: "started 10 January 2017; code edited for publication August 2019"
+output: html_notebook
+---
+
+```{r, }
+knitr::opts_chunk$set(comment = NA)
+```
+
+Load libraries
+```{r, message=FALSE}
+library(rethinking) #V 1.59; loads required packages rstan, ggplot2, StanHeaders, parallel
+library(plyr) #V 1.8.4
+library(dplyr) #V 0.7.4
+library(pROC)  #V 1.10.0
+library(ggplot2) #V 2.2.1
+library(cowplot) #V 0.9.2
+library(grid) #V 3.4.3
+library(tidyverse) #V 1.2.1
+```
+
+Colors I like that are also ok for color-blindness
+```{r, fig.height=3, fig.width=14}
+skhpal<-c("black","gray25","gray75", "slateblue","darkslateblue", "royalblue4", "chartreuse3","forestgreen", "darkgreen","chocolate3","darkgoldenrod1", "darkgoldenrod3", "#fed976","#feb24c","#fd8d3c", "#fc4e2a", "#e31a1c","#b10026")
+
+plot(x = 1:length(skhpal), y = rep(1, length(skhpal)), pch = 19, cex = 5, 
+    col = skhpal, yaxt = "n", bty = "n", xaxt = "n", xlab = "", ylab = "")
+text(x = 1:length(skhpal), y = rep(1, length(skhpal), labels = seq(1:length(skhpal))))
+```
+
+Code presented in order of when it is referred to in the text
+
+**Analyses: Predation (caged and uncaged larvae)**
+Note: There will be a slightly different result each time models are refit because sampling. I saved outputs for models presesnted in the paper as .rds in order to exactly replicate results. If you want the exact result the paper achieved, load and the .RDS files and run individual chunks for each model, or all at once (see chunk at line 2870; Use Alt+Shift+G to navigate to individual lines of code.). If you want to fit a new model and compare results, rerun the model fit chunk (rename the model and the saved rds file first). 
+
+Load predation database (n = 1994) with identities of orchards anonymized
+```{r}
+d <- read.csv("./predation_data/predation_covariates_d1994_anon.csv")
+```
+
+Reduce to only uncaged larvae, rename variables, center continuous data, create stan database
+```{r}
+d1<- d %>%
+  filter(cage == 0) %>% #uncaged sentinel larvae only
+  dplyr::select(cage, n, pred, pair, orchard, distanceD, treeU, larvaeU,
+                I_lpred_maxAb, I_wood_maxAb,
+                sentineltreePC1, cmnumpertree, proppresent, TFIinsect.2013,
+                margvegPC1, habitatD, edgespec, 
+                r0500_woodland, r0500_nathab, r0500_nat_seminat) %>% #previously selected 500m radius landscape cover
+  mutate(treeid = treeU,
+         orch = orchard,
+         loc = distanceD,
+         lpredMA_c = I_lpred_maxAb - mean(I_lpred_maxAb), #center data
+         woodpeckerMA_c = I_wood_maxAb - mean(I_wood_maxAb), 
+         treepc1 = sentineltreePC1,
+         cmnum_c = cmnumpertree - mean(cmnumpertree), 
+         cmtprop_c = proppresent - mean(proppresent),
+         tfi_c = TFIinsect.2013 - mean(TFIinsect.2013),
+         mvegpc1 = margvegPC1,
+         hab = habitatD,
+         marg = coerce_index(factor(edgespec)),   #creates a non-ordered dummy variables
+         nathab_c = r0500_nathab - mean(r0500_nathab), 
+         seminat_c = r0500_nat_seminat - mean(r0500_nat_seminat),
+         woodland_c = r0500_woodland - mean(r0500_woodland)
+         ) %>%
+  dplyr::select(cage, n, pred,  pair, treeid, orch, loc, lpredMA_c, woodpeckerMA_c, 
+                treepc1, cmnum_c, cmtprop_c, tfi_c, 
+                mvegpc1, hab, marg,  
+                nathab_c, seminat_c, woodland_c)
+
+#Generate Tree Predation Factor 
+treepred<- d1 %>% 
+  group_by(treeid) %>%
+  summarise(numtreepred = sum(pred))
+
+tcheck2<-merge(x=d1, y=treepred, by.x=c("treeid"), by.y=c("treeid"), sort=TRUE)
+
+t <- tcheck2 %>%
+  mutate(TPF = ifelse(numtreepred==0,0,1)) %>%
+  mutate(TPF = ifelse(numtreepred==1 & pred==1,0,TPF)) %>%
+  mutate(TPF = ifelse(numtreepred>1 & pred==0,1,TPF))  %>%
+  mutate(TPF = ifelse(numtreepred>1 & pred==1,1,TPF)) 
+  
+d1$TPF_c <-t$TPF-mean(t$TPF)
+rm(treepred, tcheck2,t)
+
+#Reduce predictors for stan
+ustan<-d1[,c(5:19,4,2,3, 20)] 
+head(ustan)
+```
+
+*f0     intercept only* 
+```{r, eval = FALSE}
+f0<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch],
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f0, "f0.rds")
+```
+
+*Load exact saved model from paper* 
+```{r}
+f0<-readRDS("./predation_data/uncaged_predation_models/f0.rds")
+```
+
+*Check chains*
+Hit enter in console for page 2. If your screen is big enough, the plot will appear after chunk. If not, enlarge plot window and view there. 
+```{r, eval = FALSE }
+plot(f0)
+```
+
+*Check n_eff and Rhat and posterior density estimates*
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf0<-precis(f0, depth=2, prob=0.95)
+precf0
+plot(precis(f1, prob=0.95))
+```
+
+*f1     i + TPF_c*
+```{r, eval = FALSE}
+f1<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpf*TPF_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpf ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f1, "f1.rds")
+```
+
+```{r}
+f1<-readRDS("./predation_data/uncaged_predation_models/f1.rds")
+```
+
+```{r, eval=FALSE}
+plot(f1)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf1<-precis(f1, depth=2, prob=0.95)
+precf1
+plot(precis(f1, prob=0.95))
+```
+
+*f1a     i + TPF_c + lpredMA_c*
+```{r, eval = FALSE}
+f1a<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpf*TPF_c + bpredMA*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpf ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f1a, "f1a.rds")
+```
+
+```{r}
+f1a<-readRDS("./predation_data/uncaged_predation_models/f1a.rds")
+```
+
+```{r, eval=FALSE}
+plot(f1a)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf1a<-precis(f1a, depth=2, prob=0.95)
+precf1a
+plot(precis(f1a, prob=0.95))
+```
+
+*f1b     i + TPF_c x lpredMA_c*
+```{r, eval = FALSE}
+f1b<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpf*TPF_c + bpredMA*lpredMA_c + btpfxpredMA*TPF_c*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpf ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    btpfxpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f1b, "f1b.rds")
+```
+
+```{r}
+f1b<-readRDS("./predation_data/uncaged_predation_models/f1b.rds")
+```
+
+```{r, eval=FALSE}
+plot(f1b)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf1b<-precis(f1b, depth=2, prob=0.95)
+precf1b
+plot(precis(f1b, prob=0.95))
+```
+
+*f1c     i + TPF_c + woodpeckerMA_c*
+```{r, eval = FALSE}
+f1c<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpf*TPF_c + bwoodMA*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpf ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f1c, "f1c.rds")
+```
+
+```{r}
+f1c<-readRDS("./predation_data/uncaged_predation_models/f1c.rds")
+```
+
+```{r, eval=FALSE}
+plot(f1c)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf1c<-precis(f1c, depth=2, prob=0.95)
+precf1c
+plot(precis(f1c, prob=0.95))
+```
+
+*f1d     i + TPF_c x woodpeckerMA_c*
+```{r, eval = FALSE}
+f1d<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpf*TPF_c + bwoodMA*lpredMA_c + btpfxwoodMA*TPF_c*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpf ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    btpfxwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f1d, "f1d.rds")
+```
+
+```{r}
+f1d<-readRDS("./predation_data/uncaged_predation_models/f1d.rds")
+```
+
+```{r, eval=FALSE}
+plot(f1d)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf1d<-precis(f1d, depth=2, prob=0.95)
+precf1d
+plot(precis(f1d, prob=0.95))
+```
+
+*f2     i + lpredAb_c* 
+```{r, eval = FALSE}
+f2<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bpredMA*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f2, "f2.rds")
+```
+
+```{r}
+f2<-readRDS("./predation_data/uncaged_predation_models/f2.rds")
+```
+
+```{r, eval=FALSE}
+plot(f2)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf2<-precis(f2, depth=2, prob=0.95)
+precf2
+plot(precis(f2, prob=0.95))
+```
+
+*f3     i + woodmaxAb_c* 
+```{r, eval = FALSE}
+f3<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bwoodMA*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f3, "f3.rds")
+```
+
+```{r}
+f3<-readRDS("./predation_data/uncaged_predation_models/f3.rds")
+```
+
+```{r, eval=FALSE}
+plot(f3)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf3<-precis(f3, depth=2, prob=0.95)
+precf3
+plot(precis(f3, prob=0.95))
+```
+
+*compare bird predictors*
+```{r}
+compare(f1a, f1b, f1c, f1d, f2, f3)
+```
+All take weight, Woodpecker x TPF top with 0.34
+
+*f4     i + treepc1*  
+```{r, eval = FALSE}
+f4<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f4, "f4.rds")
+```
+
+```{rE}
+f4<-readRDS("./predation_data/uncaged_predation_models/f4.rds")
+```
+
+```{r, eval=FALSE}
+plot(f4)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf4<-precis(f4, depth=2, prob=0.95)
+precf4
+plot(precis(f4, prob=0.95))
+```
+
+*f4a     i + treepc1  + lpredMA_c*
+```{r, eval = FALSE}
+f4a<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1  +  bpredMA*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f4a, "f4a.rds")
+```
+
+```{r}
+f4a<-readRDS("./predation_data/uncaged_predation_models/f4a.rds")
+```
+
+```{r, eval=FALSE}
+plot(f4a)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf4a<-precis(f4a, depth=2, prob=0.95)
+precf4a
+plot(precis(f4a, prob=0.95))
+```
+
+*f4b     i + treepc1  x lpredMA_c*
+```{r, eval = FALSE}
+f4b<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bpredMA*lpredMA_c + btpc1xpredMA*lpredMA_c*treepc1,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    btpc1xpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f4b, "f4b.rds")
+```
+
+```{r}
+f4b<-readRDS("./predation_data/uncaged_predation_models/f4b.rds")
+```
+
+```{r, eval=FALSE}
+plot(f4b)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf4b<-precis(f4b, depth=2, prob=0.95)
+precf4b
+plot(precis(f4b, prob=0.95))
+```
+
+*f4c     i + treepc1  + woodpeckerMA_c*
+```{r, eval = FALSE}
+f4c<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1  +  bwoodMA*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f4c, "f4c.rds")
+```
+
+```{r}
+f4c<-readRDS("./predation_data/uncaged_predation_models/f4c.rds")
+```
+
+```{r, eval=FALSE}
+plot(f4c)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf4c<-precis(f4c, depth=2, prob=0.95)
+precf4c
+plot(precis(f4c, prob=0.95))
+```
+
+*f4d     i + treepc1  x woodpeckerMA_c*
+```{r, eval = FALSE}
+f4d<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bwoodMA*woodpeckerMA_c + btpc1xwoodMA*woodpeckerMA_c*treepc1,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    btpc1xwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f4d, "f4d.rds")
+```
+
+```{r}
+f4d<-readRDS("./predation_data/uncaged_predation_models/f4d.rds")
+```
+
+```{r, eval=FALSE}
+plot(f4d)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf4d<-precis(f4d, depth=2, prob=0.95)
+precf4d
+plot(precis(f4d, prob=0.95))
+```
+
+*f4e     i + treepc1  + mvegpc1*
+```{r, eval = FALSE}
+f4e<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bmvpc1*mvegpc1,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bmvpc1 ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2)
+
+#saveRDS(f4e, "f4e.rds")
+```
+
+```{r}
+f4e<-readRDS("./predation_data/uncaged_predation_models/f4e.rds")
+```
+
+```{r, eval=FALSE}
+plot(f4e)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf4e<-precis(f4e, depth=2, prob=0.95)
+precf4e
+plot(precis(f4e, prob=0.95))
+```
+
+*f4f     i + treepc1  x mvegpc1*
+```{r, eval = FALSE}
+f4f<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bmvpc1*mvegpc1 + btpc1xmvpc1*treepc1*mvegpc1,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bmvpc1 ~ dnorm(0,1),
+    btpc1xmvpc1 ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f4f, "f4f.rds")
+```
+
+```{r}
+f4f<-readRDS("./predation_data/uncaged_predation_models/f4f.rds")
+```
+
+```{r, eval=FALSE}
+plot(f4f)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf4f<-precis(f4f, depth=2, prob=0.95)
+precf4f
+plot(precis(f4f, prob=0.95))
+```
+
+*f4g     i + treepc1  + hab*
+```{r, eval = FALSE}
+f4g<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bhab*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f4g, "f4g.rds")
+```
+
+```{r}
+f4g<-readRDS("./predation_data/uncaged_predation_models/f4g.rds")
+```
+
+```{r, eval=FALSE}
+plot(f4g)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf4g<-precis(f4g, depth=2, prob=0.95)
+precf4g
+plot(precis(f4g, prob=0.95))
+```
+
+*f4h     i + treepc1  x hab*
+```{r, eval = FALSE}
+f4h<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bhab*hab + btpc1xhab*treepc1*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    btpc1xhab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f4h, "f4h.rds")
+```
+
+```{r}
+f4h<-readRDS("./predation_data/uncaged_predation_models/f4h.rds")
+```
+
+```{r, eval=FALSE}
+plot(f4h)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf4h<-precis(f4h, depth=2, prob=0.95)
+precf4h
+plot(precis(f4h, prob=0.95))
+```
+
+*f4i     i + treepc1  + marg*
+```{r, eval = FALSE}
+f4i<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bmarg*marg,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bmarg ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f4i, "f4i.rds")
+```
+
+```{rE}
+f4i<-readRDS("./predation_data/uncaged_predation_models/f4i.rds")
+```
+
+```{r, eval=FALSE}
+plot(f4i)
+```
+
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf4i<-precis(f4i, depth=2, prob=0.95)
+precf4i
+plot(precis(f4i, prob=0.95))
+```
+
+*f4j     i + treepc1  x marg*
+```{r, eval = FALSE}
+f4j<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bmarg*marg + btpc1xmarg*treepc1*marg,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bmarg ~ dnorm(0,1),
+    btpc1xmarg ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f4j, "f4j.rds")
+```
+
+```{r}
+f4j<-readRDS("./predation_data/uncaged_predation_models/f4j.rds")
+```
+
+```{r, eval=FALSE}
+plot(f4j)
+```
+
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf4j<-precis(f4j, depth=2, prob=0.95)
+precf4j
+plot(precis(f4j, prob=0.95))
+```
+
+```{r}
+compare(f4, f4a, f4b, f4c, f4d, f4e, f4f, f4g, f4h, f4i, f4j)
+```
+
+*f5     i + loc* 
+```{r, eval = FALSE}
+f5<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bloc*loc,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bloc ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f5, "f5.rds")
+```
+
+```{r}
+f5<-readRDS("./predation_data/uncaged_predation_models/f5.rds")
+```
+
+```{r, eval=FALSE}
+plot(f5)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf5<-precis(f5, depth=2, prob=0.95)
+precf5
+plot(precis(f5, prob=0.95))
+```
+
+*f5a     i + loc + lpredMA* 
+```{r, eval = FALSE}
+f5a<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bloc*loc + bpredMA*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bloc ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f5a, "f5a.rds")
+```
+
+```{r}
+f5a<-readRDS("./predation_data/uncaged_predation_models/f5a.rds")
+```
+
+```{r, eval=FALSE}
+plot(f5a)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf5a<-precis(f5a, depth=2, prob=0.95)
+precf5a
+plot(precis(f5a, prob=0.95))
+```
+
+*f5b     i + loc x lpredMA* 
+```{r, eval = FALSE}
+f5b<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bloc*loc + bpredMA*lpredMA_c + blocxpredMA*loc*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bloc ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    blocxpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f5b, "f5b.rds")
+```
+
+```{r}
+f5b<-readRDS("./predation_data/uncaged_predation_models/f5b.rds")
+```
+
+```{r, eval=FALSE}
+plot(f5b)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf5b<-precis(f5b, depth=2, prob=0.95)
+precf5b
+plot(precis(f5b, prob=0.95))
+```
+
+*f5c     i + loc  + woodpeckerMA_c*
+```{r, eval = FALSE}
+f5c<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bloc*loc +  bwoodMA*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bloc ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2)
+
+#saveRDS(f5c, "f5c.rds")
+```
+
+```{r}
+f5c<-readRDS("./predation_data/uncaged_predation_models/f5c.rds")
+```
+
+```{r, eval=FALSE}
+plot(f5c)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf5c<-precis(f5c, depth=2, prob=0.95)
+precf5c
+plot(precis(f5c, prob=0.95))
+```
+
+*f5d     i + loc  x woodpeckerMA_c*
+```{r, eval = FALSE}
+f5d<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bloc*loc + bwoodMA*woodpeckerMA_c + blocxwoodMA*woodpeckerMA_c*loc,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bloc ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    blocxwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f5d, "f5d.rds")
+```
+
+```{r}
+f5d<-readRDS("./predation_data/uncaged_predation_models/f5d.rds")
+```
+
+```{r, eval=FALSE}
+plot(f5d)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf5d<-precis(f5d, depth=2, prob=0.95)
+precf5d
+plot(precis(f5d, prob=0.95))
+```
+
+*f5e     i + loc + treepc1 + lpredMA* 
+```{r, eval = FALSE}
+f5e<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bloc*loc + btpc1*treepc1 + bpredMA*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bloc ~ dnorm(0,1),
+    btpc1 ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f5e, "f5e.rds")
+```
+
+```{r}
+f5e<-readRDS("./predation_data/uncaged_predation_models/f5e.rds")
+```
+
+```{r, eval=FALSE}
+plot(f5e)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf5e<-precis(f5e, depth=2, prob=0.95)
+precf5e
+plot(precis(f5e, prob=0.95))
+```
+
+*f5f     i + loc + treepc1 + woodpeckerMA* 
+```{r, eval = FALSE}
+f5f<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bloc*loc + btpc1*treepc1 + bwoodMA*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bloc ~ dnorm(0,1),
+    btpc1 ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+#saveRDS(f5f, "f5f.rds")
+```
+
+```{r}
+f5f<-readRDS("./predation_data/uncaged_predation_models/f5f.rds")
+```
+
+```{r, eval=FALSE}
+plot(f5f)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf5f<-precis(f5f, depth=2, prob=0.95)
+precf5f
+plot(precis(f5f, prob=0.95))
+```
+
+*f5g     i + loc + treepc1 *
+```{r, eval = FALSE}
+f5g<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bloc*loc + btpc1*treepc1,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bloc ~ dnorm(0,1),
+    btpc1 ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f5g, "f5g.rds")
+```
+
+```{r}
+f5g<-readRDS("./predation_data/uncaged_predation_models/f5g.rds")
+```
+
+```{r, eval=FALSE}
+plot(f5g)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf5g<-precis(f5g, depth=2, prob=0.95)
+precf5g
+plot(precis(f5g, prob=0.95))
+```
+
+*f5h     i + loc x treepc1* 
+```{r, eval = FALSE}
+f5h<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bloc*loc + btpc1*treepc1 + blocxtpc1*loc*treepc1,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bloc ~ dnorm(0,1),
+    btpc1 ~ dnorm(0,1),
+    blocxtpc1 ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f5h, "f5h.rds")
+```
+
+```{r}
+f5h<-readRDS("./predation_data/uncaged_predation_models/f5h.rds")
+```
+
+```{r, eval=FALSE}
+plot(f5h)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf5h<-precis(f5h, depth=2, prob=0.95)
+precf5h
+plot(precis(f5h, prob=0.95))
+```
+
+*f5i     i + loc + treepc1 + cmnum*
+```{r, eval = FALSE}
+f5i<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bloc*loc + btpc1*treepc1 + bcm*cmnum_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bloc ~ dnorm(0,1),
+    btpc1 ~ dnorm(0,1),
+    bcm ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f5i, "f5i.rds")
+```
+
+```{r}
+f5i<-readRDS("./predation_data/uncaged_predation_models/f5i.rds")
+```
+
+```{r, eval=FALSE}
+plot(f5i)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf5i<-precis(f5i, depth=2, prob=0.95)
+precf5i
+plot(precis(f5i, prob=0.95))
+```
+
+*f5j     i + loc x cmnum*
+```{r, eval = FALSE}
+f5j<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bloc*loc + bcm*cmnum_c + blocxbcm*loc*cmnum_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bloc ~ dnorm(0,1),
+    bcm ~ dnorm(0,1),
+    blocxbcm ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f5j, "f5j.rds")
+```
+
+```{r}
+f5j<-readRDS("./predation_data/uncaged_predation_models/f5j.rds")
+```
+
+```{r, eval=FALSE}
+plot(f5j)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf5j<-precis(f5j, depth=2, prob=0.95)
+precf5j
+plot(precis(f5j, prob=0.95))
+```
+
+*f5k     i + loc x cmtprop_c*
+```{r, eval = FALSE}
+f5k<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bloc*loc + bpcm*cmtprop_c + blocxbpcm*loc*cmtprop_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bloc ~ dnorm(0,1),
+    bpcm ~ dnorm(0,1),
+    blocxbpcm ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f5k, "f5k.rds")
+```
+
+```{r}
+f5k<-readRDS("./predation_data/uncaged_predation_models/f5k.rds")
+```
+
+```{r, eval=FALSE}
+plot(f5k)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf5k<-precis(f5k, depth=2, prob=0.95)
+precf5k
+plot(precis(f5k, prob=0.95))
+```
+
+*f5l     i + loc + hab*
+```{r, eval = FALSE}
+f5l<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bloc*loc + bhab*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bloc ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f5l, "f5l.rds")
+```
+
+```{r}
+f5l<-readRDS("./predation_data/uncaged_predation_models/f5l.rds")
+```
+
+```{r, eval=FALSE}
+plot(f5l)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf5l<-precis(f5l, depth=2, prob=0.95)
+precf5l
+plot(precis(f5l, prob=0.95))
+```
+
+*f5m     i + loc x hab*
+```{r, eval = FALSE}
+f5m<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bloc*loc + bhab*hab + blocxhab*loc*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bloc ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    blocxhab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f5m, "f5m.rds")
+```
+
+```{r}
+f5m<-readRDS("./predation_data/uncaged_predation_models/f5m.rds")
+```
+
+```{r, eval=FALSE}
+plot(f5m)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf5m<-precis(f5m, depth=2, prob=0.95)
+precf5m
+plot(precis(f5m, prob=0.95))
+```
+
+```{r}
+compare(f5, f5a, f5b, f5c, f5d, f5e, f5f, f5g, f5h, f5i, f5j, f5k, f5l, f5m )
+```
+
+f6a    i + hab*
+```{r, eval = FALSE}
+f6a<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bhab*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bhab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f6a, "f6a.rds")
+```
+
+```{r}
+f6a<-readRDS("./predation_data/uncaged_predation_models/f6a.rds")
+```
+
+```{r, eval=FALSE}
+plot(f6a)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf6a<-precis(f6a, depth=2, prob=0.95)
+precf6a
+plot(precis(f6a, prob=0.95))
+```
+
+*f6a1    i +  hab  x lpredMA_c*
+```{r, eval = FALSE}
+f6a1<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bhab*hab + bpredMA*lpredMA_c + bhabxpredMA*lpredMA_c*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bhab ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    bhabxpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f6a1, "f6a1.rds")
+```
+
+```{r}
+f6a1<-readRDS("./predation_data/uncaged_predation_models/f6a1.rds")
+```
+
+```{r, eval=FALSE}
+plot(f6a1)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf6a1<-precis(f6a1, depth=2, prob=0.95)
+precf6a1
+plot(precis(f6a1, prob=0.95))
+```
+
+*f6a2   i +  treepc1 + hab  x lpredMA_c*
+```{r, eval = FALSE}
+f6a2<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bhab*hab + bpredMA*lpredMA_c + bhabxpredMA*lpredMA_c*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    bhabxpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f6a2, "f6a2.rds")
+```
+
+```{r}
+f6a2<-readRDS("./predation_data/uncaged_predation_models/f6a2.rds")
+```
+
+```{r, eval=FALSE}
+plot(f6a2)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf6a2<-precis(f6a2, depth=2, prob=0.95)
+precf6a2
+plot(precis(f6a2, prob=0.95))
+```
+
+*f6a2a   i +  treepc1 + hab  x lpredMA_c*
+```{r, eval = FALSE}
+f6a2a<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bhab*hab + bpredMA*lpredMA_c ,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f6a2a, "f6a2a.rds")
+```
+
+```{r}
+f6a2a<-readRDS("./predation_data/uncaged_predation_models/f6a2a.rds")
+
+```
+
+```{r, eval=FALSE}
+plot(f6a2a)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f6a2a, depth=2, prob=0.95)
+plot(precis(f6a2a, prob=0.95))
+```
+
+*f6a4    i + tpc1 + hab  x woodpeckerMA_c*
+```{r, eval = FALSE}
+f6a4<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bhab*hab + bwoodMA*woodpeckerMA_c + bhabxwoodMA*woodpeckerMA_c*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    bhabxwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f6a4, "f6a4.rds")
+```
+
+```{r}
+f6a4<-readRDS("./predation_data/uncaged_predation_models/f6a4.rds")
+```
+
+```{r, eval=FALSE}
+plot(f6a4)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f6a4, depth=2, prob=0.95)
+plot(precis(f6a4, prob=0.95))
+```
+
+*f6a4a   i + tpc1 + hab  + woodpeckerMA_c*
+```{r, eval = FALSE}
+f6a4a<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bhab*hab + bwoodMA*woodpeckerMA_c ,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f6a4a, "f6a4a.rds")
+```
+
+```{r, eval=FALSE}
+plot(f6a4a)
+```
+
+```{r}
+f6a4a<-readRDS("./predation_data/uncaged_predation_models/f6a4a.rds")
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f6a4a, depth=2, prob=0.95)
+plot(precis(f6a4a, prob=0.95))
+```
+
+*f6a5 i + hab x tfi_c*
+```{r, eval = FALSE}
+f6a5<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bhab*hab + btfi*tfi_c + bhabxtfi*tfi_c*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bhab ~ dnorm(0,1),
+    btfi ~ dnorm(0,1),
+    bhabxtfi ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f6a5, "f6a5.rds")
+```
+
+```{r}
+f6a5<-readRDS("./predation_data/uncaged_predation_models/f6a5.rds")
+```
+
+```{r, eval=FALSE}
+plot(f6a5)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf6a5<-precis(f6a5, depth=2, prob=0.95)
+precf6a5
+plot(precis(f6a5, prob=0.95))
+```
+
+f6b    i + marg*
+```{r, eval = FALSE}
+f6b<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bmarg*marg,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bmarg ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f6b, "f6b.rds")
+```
+
+```{r}
+f6b<-readRDS("./predation_data/uncaged_predation_models/f6b.rds")
+```
+
+```{r, eval=FALSE}
+plot(f6b)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf6b<-precis(f6b, depth=2, prob=0.95)
+precf6b
+plot(precis(f6b, prob=0.95))
+```
+
+*f6b1    i + marg x lpredMA_c*
+```{r, eval = FALSE}
+f6b1<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bmarg*marg + bpred*lpredMA_c + bmargxpred*marg*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bmarg ~ dnorm(0,1),
+    bpred ~ dnorm(0,1),
+    bmargxpred ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f6b1, "f6b1.rds")
+```
+
+```{r}
+f6b1<-readRDS("./predation_data/uncaged_predation_models/f6b1.rds")
+```
+
+```{r, eval=FALSE}
+plot(f6b1)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf6b1<-precis(f6b1, depth=2, prob=0.95)
+precf6b1
+plot(precis(f6b1, prob=0.95))
+```
+
+f7     i + mvegpc1*                                          
+```{r, eval = FALSE}
+f7<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bmvpc1*mvegpc1,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bmvpc1 ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f7, "f7.rds")
+```
+
+```{r}
+f7<-readRDS("./predation_data/uncaged_predation_models/f7.rds")
+```
+
+```{r, eval=FALSE}
+plot(f7)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf7<-precis(f7, depth=2, prob=0.95)
+precf7
+plot(precis(f7, prob=0.95))
+```
+
+*f7a     i + treepc1 + mvegpc1xlpredMA_c*                                          
+```{r, eval = FALSE}
+f7a<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bmvpc1*mvegpc1 + bpredMA*lpredMA_c +
+      bmvpc1xpredMA**mvegpc1*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bmvpc1 ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    bmvpc1xpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f7a, "f7a.rds")
+```
+
+```{r}
+f7a<-readRDS("./predation_data/uncaged_predation_models/f7a.rds")
+```
+
+```{r, eval=FALSE}
+plot(f7a)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf7a<-precis(f7a, depth=2, prob=0.95)
+precf7a
+plot(precis(f7a, prob=0.95))
+```
+
+*f7b     i + treepc1 + mvegpc1xwoodMA_c*                                          
+```{r, eval = FALSE}
+f7b<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bmvpc1*mvegpc1 + bwoodMA*woodpeckerMA_c +
+      bmvpc1xwoodMA**mvegpc1*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bmvpc1 ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    bmvpc1xwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f7b, "f7b.rds")
+```
+
+```{r}
+f7b<-readRDS("./predation_data/uncaged_predation_models/f7b.rds")
+```
+
+```{r, eval=FALSE}
+plot(f7b)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf7b<-precis(f7b, depth=2, prob=0.95)
+precf7b
+plot(precis(f7b, prob=0.95))
+```
+
+f8a    i + cmnum_c*  
+```{r, eval = FALSE}
+f8a<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bcm*cmnum_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bcm ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f8a, "f8a.rds")
+```
+
+```{r}
+f8a<-readRDS("./predation_data/uncaged_predation_models/f8a.rds")
+```
+
+```{r, eval=FALSE}
+plot(f8a)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf8a<-precis(f8a, depth=2, prob=0.95)
+precf8a
+plot(precis(f8a, prob=0.95))
+```
+
+*f8a1    i + cmnum_c + lpredMA_c*
+```{r, eval = FALSE}
+f8a1<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bcm*cmnum_c + bpredMA*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bcm ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f8a1, "f8a1.rds")
+```
+
+```{r}
+f8a1<-readRDS("./predation_data/uncaged_predation_models/f8a1.rds")
+```
+
+```{r, eval=FALSE}
+plot(f8a1)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf8a1<-precis(f8a1, depth=2, prob=0.95)
+precf8a1
+plot(precis(f8a1, prob=0.95))
+```
+
+*f8a2    i + cmnum_c x lpredMA_c*
+```{r, eval = FALSE}
+f8a2<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bcm*cmnum_c + bpredMA*lpredMA_c + bcmxpredMA*cmnum_c*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bcm ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    bcmxpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+#saveRDS(f8a2, "f8a2.rds")
+```
+
+```{r}
+f8a2<-readRDS("./predation_data/uncaged_predation_models/f8a2.rds")
+```
+
+```{r, eval=FALSE}
+plot(f8a2)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf8a2<-precis(f8a2, depth=2, prob=0.95)
+precf8a2
+plot(precis(f8a2, prob=0.95))
+```
+
+*f8a3    i + cmnum_c + woodpeckerMA_c*  
+```{r, eval = FALSE}
+f8a3<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bcm*cmnum_c + bwoodMA*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bcm ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+#saveRDS(f8a3, "f8a3.rds")
+```
+
+```{r}
+f8a3<-readRDS("./predation_data/uncaged_predation_models/f8a3.rds")
+```
+
+```{r, eval=FALSE}
+plot(f8a3)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf8a3<-precis(f8a3, depth=2, prob=0.95)
+precf8a3
+plot(precis(f8a3, prob=0.95))
+```
+
+*f8a4    i + cmnum_c x woodpeckerMA_c*  
+```{r, eval = FALSE}
+f8a4<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bcm*cmnum_c + bwoodMA*woodpeckerMA_c + bcmxwoodMA*cmnum_c*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bcm ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    bcmxwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f8a4, "f8a4.rds")
+```
+
+
+```{r}
+f8a4<-readRDS("./predation_data/uncaged_predation_models/f8a4.rds")
+```
+
+```{r, eval=FALSE}
+plot(f8a4)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf8a4<-precis(f8a4, depth=2, prob=0.95)
+precf8a4
+plot(precis(f8a4, prob=0.95))
+```
+
+f8b    i + cmtprop_c*
+```{r, eval = FALSE}
+f8b<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bpcm*cmtprop_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bpcm ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f8b, "f8b.rds")
+```
+
+```{r}
+f8b<-readRDS("./predation_data/uncaged_predation_models/f8b.rds")
+```
+
+```{r, eval=FALSE}
+plot(f8b)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf8b<-precis(f8b, depth=2, prob=0.95)
+precf8b
+plot(precis(f8b, prob=0.95))
+```
+
+*f8b1    i + cmtprop_c + lpredMA_c*  
+```{r, eval = FALSE}
+f8b1<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bpcm*cmtprop_c + blpredMA*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bpcm ~ dnorm(0,1),
+    blpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f8b1, "f8b1.rds")
+```
+
+```{r}
+f8b1<-readRDS("./predation_data/uncaged_predation_models/f8b1.rds")
+```
+
+```{r, eval=FALSE}
+plot(f8b1)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf8b1<-precis(f8b1, depth=2, prob=0.95)
+precf8b1
+plot(precis(f8b1, prob=0.95))
+```
+
+*f8b2    i + cmtprop_c x lpredMA_c * 
+```{r, eval = FALSE}
+f8b2<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bpcm*cmtprop_c + bpredMA*lpredMA_c + bpcmxpredMA*cmtprop_c*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bpcm ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    bpcmxpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f8b2, "f8b2.rds")
+```
+
+```{r}
+f8b2<-readRDS("./predation_data/uncaged_predation_models/f8b2.rds")
+```
+
+```{r, eval=FALSE}
+plot(f8b2)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf8b2<-precis(f8b2, depth=2, prob=0.95)
+precf8b2
+plot(precis(f8b2, prob=0.95))
+```
+
+*f8b3    i + cmtprop_c + woodpeckerMA_c*  
+```{r, eval = FALSE}
+f8b3<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bpcm*cmtprop_c + bwoodMA*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bpcm ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f8b3, "f8b3.rds")
+```
+
+```{r}
+f8b3<-readRDS("./predation_data/uncaged_predation_models/f8b3.rds")
+```
+
+```{r, eval=FALSE}
+plot(f8b3)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf8b3<-precis(f8b3, depth=2, prob=0.95)
+precf8b3
+plot(precis(f8b3, prob=0.95))
+```
+
+*f8b4    i + cmtprop_c x woodpeckerMA_c*  
+```{r, eval = FALSE}
+f8b4<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bpcm*cmtprop_c + bwoodMA*woodpeckerMA_c + bpcmxwoodMA*cmtprop_c*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bpcm ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    bpcmxwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f8b4, "f8b4.rds")
+```
+
+```{r}
+f8b4<-readRDS("./predation_data/uncaged_predation_models/f8b4.rds")
+```
+
+```{r, eval=FALSE}
+plot(f8b4)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf8b4<-precis(f8b4, depth=2, prob=0.95)
+precf8b4
+plot(precis(f8b4, prob=0.95))
+```
+
+*compare cmnum predictors*
+```{r}
+compare(f8a, f8a1, f8a2, f8a3, f8a4 , f8b, f8b1, f8b2, f8b3, f8b4)
+```
+f8b2    i + cmtprop_c x lpredMA_c carries 35% of the WAIC weight.
+
+
+f9    i + tfi_c*  
+```{r, eval = FALSE}
+f9<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btfi*tfi_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btfi ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f9, "f9.rds")
+```
+
+```{r}
+f9<-readRDS("./predation_data/uncaged_predation_models/f9.rds")
+```
+
+```{r, eval=FALSE}
+plot(f9)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf9<-precis(f9, depth=2, prob=0.95)
+precf9
+plot(precis(f9, prob=0.95))
+```
+
+*f9a    i + tfi_c + lpredMA *
+```{r, eval = FALSE}
+f9a<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btfi*tfi_c + bpredMA*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btfi ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f9a, "f9a.rds")
+```
+
+```{r}
+f9a<-readRDS("./predation_data/uncaged_predation_models/f9a.rds")
+```
+
+```{r, eval=FALSE}
+plot(f9a)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf9a<-precis(f9a, depth=2, prob=0.95)
+precf9a
+plot(precis(f9a, prob=0.95))
+```
+
+*f9b    i + tfi_c x lpredMA*
+```{r, eval = FALSE}
+f9b<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btfi*tfi_c + bpredMA*lpredMA_c + btfixpredMA*tfi_c*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btfi ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    btfixpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f9b, "f9b.rds")
+```
+
+```{r}
+f9b<-readRDS("./predation_data/uncaged_predation_models/f9b.rds")
+```
+
+```{r, eval=FALSE}
+plot(f9b)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf9b<-precis(f9b, depth=2, prob=0.95)
+precf9b
+plot(precis(f9b, prob=0.95))
+```
+
+*f9c    i + tfi_c + woodpeckerMA_c*  
+```{r, eval = FALSE}
+f9c<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btfi*tfi_c + bwoodMA*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btfi ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f9c, "f9c.rds")
+```
+
+```{r}
+f9c<-readRDS("./predation_data/uncaged_predation_models/f9c.rds")
+```
+
+```{r, eval=FALSE}
+plot(f9c)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf9c<-precis(f9c, depth=2, prob=0.95)
+precf9c
+plot(precis(f9c, prob=0.95))
+```
+
+*f9d    i + tfi_c x woodpeckerMA_c*   
+```{r, eval = FALSE}
+f9d<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btfi*tfi_c + bwoodMA*woodpeckerMA_c + btfixwoodMA*tfi_c*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btfi ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    btfixwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f9d, "f9d.rds")
+```
+
+```{r}
+f9d<-readRDS("./predation_data/uncaged_predation_models/f9d.rds")
+```
+
+```{r, eval=FALSE}
+plot(f9d)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf9d<-precis(f9d, depth=2, prob=0.95)
+precf9d
+plot(precis(f9d, prob=0.95))
+```
+
+f10a   i + woodland_c  (oak, riparian, planted)*
+```{r, eval = FALSE}
+f10a<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bwoodland*woodland_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bwoodland ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10a, "f10a.rds")
+```
+
+```{r}
+f10a<-readRDS("./predation_data/uncaged_predation_models/f10a.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10a)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf10a<-precis(f10a, depth=2, prob=0.95)
+precf10a
+plot(precis(f10a, prob=0.95))
+```
+
+*f10aa   i + woodland_c + woodland_c^2 (oak, riparian, planted)*
+```{r, eval = FALSE}
+ustan$woodland_c2 <- (ustan+woodland_c)^2
+
+f10aa<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bwoodland*woodland_c + bwoodland2*woodland_c2,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bwoodland ~ dnorm(0,1),
+    bwoodland2 ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10aa, "f10aa.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10aa)
+```
+
+```{r}
+f10aa<-readRDS("./predation_data/uncaged_predation_models/f10aa.rds")
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf10aa<-precis(f10aa, depth=2, prob=0.95)
+precf10aa
+plot(precis(f10aa, prob=0.95))
+```
+
+*f10a1   i + woodland_c + lpredMA_c*
+```{r, eval = FALSE}
+f10a1<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bwoodland*woodland_c + bpredMA*lpredMA_c ,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bwoodland ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10a1, "f10a1.rds")
+```
+
+```{r, eval=FALSE}
+f10a1<-readRDS("./predation_data/uncaged_predation_models/f10a1.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10a1)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf10a1<-precis(f10a1, depth=2, prob=0.95)
+precf10a1
+plot(precis(f10a1, prob=0.95))
+```
+
+*f10a2   i + woodland_c x lpredMA_c*
+```{r, eval = FALSE}
+f10a2<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] +bwoodland*woodland_c + bpredMA*lpredMA_c + bwoodlandxpredMA*woodland_c*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bwoodland ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    bwoodlandxpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10a2, "f10a2.rds")
+```
+
+```{r}
+f10a2<-readRDS("./predation_data/uncaged_predation_models/f10a2.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10a2)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf10a2<-precis(f10a2, depth=2, prob=0.95)
+precf10a2
+plot(precis(f10a2, prob=0.95))
+```
+
+*f10a3   i + woodland_c + woodpeckerMA_c*
+```{r, eval = FALSE}
+f10a3<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bwoodland*woodland_c + bwoodMA*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bwoodland ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10a3, "f10a3.rds")
+```
+
+```{rE}
+f10a3<-readRDS("./predation_data/uncaged_predation_models/f10a3.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10a3)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf10a3<-precis(f10a3, depth=2, prob=0.95)
+precf10a3
+plot(precis(f10a3, prob=0.95))
+```
+
+*f10a4   i + woodland_c x woodpeckerMA_c*
+```{r, eval = FALSE}
+f10a4<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bwoodland*woodland_c + bwoodMA*woodpeckerMA_c + bwoodlandxwoodMA*woodland_c*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bwoodland ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    bwoodlandxwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10a4, "f10a4.rds")
+```
+
+```{r}
+f10a4<-readRDS("./predation_data/uncaged_predation_models/f10a4.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10a4)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf10a4<-precis(f10a4, depth=2, prob=0.95)
+precf10a4
+plot(precis(f10a4, prob=0.95))
+```
+
+*f10a5   i + treepc1 + woodland_c + lpredMA_c*
+```{r, eval = FALSE}
+f10a5<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bwoodland*woodland_c + bpredMA*lpredMA_c ,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bwoodland ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10a5, "f10a5.rds")
+```
+
+```{r}
+f10a5<-readRDS("./predation_data/uncaged_predation_models/f10a5.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10a5)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf10a5<-precis(f10a5, depth=2, prob=0.95)
+precf10a5
+plot(precis(f10a5, prob=0.95))
+```
+
+*f10a6   i + treepc1 + woodland_c x lpredMA_c*
+```{r, eval = FALSE}
+f10a8<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bwoodland*woodland_c + bpredMA*lpredMA_c + bwoodlandxpredMA*woodland_c*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bwoodland ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    bwoodlandxpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10a6, "f10a6.rds")
+```
+
+```{r}
+f10a6<-readRDS("./predation_data/uncaged_predation_models/f10a6.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10a6)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf10a6<-precis(f10a6, depth=2, prob=0.95)
+precf10a6
+plot(precis(f10a6, prob=0.95))
+```
+
+*f10a7   i + treepc1 + woodland_c + woodpeckerMA_c*
+```{r, eval = FALSE}
+f10a7<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bwoodland*woodland_c + bwoodMA*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bwoodland ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10a7, "f10a7.rds")
+```
+
+```{r}
+f10a7<-readRDS("./predation_data/uncaged_predation_models/f10a7.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10a7)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf10a7<-precis(f10a7, depth=2, prob=0.95)
+precf10a7
+plot(precis(f10a7, prob=0.95))
+```
+
+*f10a8   i + treepc1 + woodland_cxwoodpeckerMA_c*
+```{r, eval = FALSE}
+f10a8<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bwoodland*woodland_c + bwoodMA*woodpeckerMA_c + bwoodlandxwoodMA*woodland_c*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bwoodland ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    bwoodlandxwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10a8, "f10a8.rds")
+```
+
+```{r}
+f10a8<-readRDS("./predation_data/uncaged_predation_models/f10a8.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10a8)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf10a8<-precis(f10a8, depth=2, prob=0.95)
+precf10a8
+plot(precis(f10a8, prob=0.95))
+```
+
+*f10b   i + nathab_c  (oak, riparian, grassland)*
+```{r, eval = FALSE}
+f10b<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bnathab*nathab_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bnathab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10b, "f10b.rds")
+```
+
+```{r}
+f10b<-readRDS("./predation_data/uncaged_predation_models/f10b.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10b)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf10b<-precis(f10b, depth=2, prob=0.95)
+precf10b
+plot(precis(f10b, prob=0.95))
+```
+
+*f10bb   i + nathab_c + nathab_c^2* 
+```{r, eval = FALSE}
+ustan$nathab_c2 <- (ustan$nathab_c)^2
+
+f10bb<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bnathab*nathab_c + bnathab2*nathab_c2,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bnathab ~ dnorm(0,1),
+    bnathab2 ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10bb, "f10bb.rds")
+```
+
+```{r}
+f10bb<-readRDS("./predation_data/uncaged_predation_models/f10bb.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10bb)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10bb, depth=2, prob=0.95)
+plot(precis(f10bb, prob=0.95))
+```
+
+*f10b1   i + nathab_c + lpredMA_c*
+```{r, eval = FALSE}
+f10b1<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bnathab*nathab_c + bpredMA*lpredMA_c ,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bnathab ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10b1, "f10b1.rds")
+```
+
+```{r}
+f10b1<-readRDS("./predation_data/uncaged_predation_models/f10b1.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10b1)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10b1, depth=2, prob=0.95)
+plot(precis(f10b1, prob=0.95))
+```
+
+*f10b2   i + nathab_c x lpredMA_c*
+```{r, eval = FALSE}
+f10b2<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] +bnathab*nathab_c + bpredMA*lpredMA_c + bnathabxpredMA*nathab_c*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bnathab ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    bnathabxpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10b2, "f10b2.rds")
+```
+
+```{r}
+f10b2<-readRDS("./predation_data/uncaged_predation_models/f10b2.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10b2)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10b2, depth=2, prob=0.95)
+plot(precis(f10b2, prob=0.95))
+```
+
+*f10b3   i + nathab_c + woodpeckerMA_c*
+```{r, eval = FALSE}
+f10b3<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bnathab*nathab_c + bwoodMA*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bnathab ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10b3, "f10b3.rds")
+```
+
+```{r}
+f10b3<-readRDS("./predation_data/uncaged_predation_models/f10b3.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10b3)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10b3, depth=2, prob=0.95)
+plot(precis(f10b3, prob=0.95))
+```
+
+*f10b4   i + nathab_c x woodpeckerMA_c*
+```{r, eval = FALSE}
+f10b4<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bnathab*nathab_c + bwoodMA*woodpeckerMA_c + bnathabxwoodMA*nathab_c*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bnathab ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    bnathabxwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10b4, "f10b4.rds")
+```
+
+```{r}
+f10b4<-readRDS("./predation_data/uncaged_predation_models/f10b4.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10b4)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10b4, depth=2, prob=0.95)
+plot(precis(f10b4, prob=0.95))
+```
+
+*f10b5   i + treepc1 + nathab_c + lpredMA_c*
+```{r, eval = FALSE}
+f10b5<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bnathab*nathab_c + bpredMA*lpredMA_c ,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bnathab ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10b5, "f10b5.rds")
+```
+
+```{r}
+f10b5<-readRDS("./predation_data/uncaged_predation_models/f10b5.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10b5)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10b5, depth=2, prob=0.95)
+plot(precis(f10b5, prob=0.95))
+```
+
+*f10b6   i + treepc1 + nathab_c x lpredMA_c*
+```{r, eval = FALSE}
+f10b6<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bnathab*nathab_c + bpredMA*lpredMA_c + bnathabxpredMA*nathab_c*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bnathab ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    bnathabxpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10b6, "f10b6.rds")
+```
+
+```{r}
+f10b6<-readRDS("./predation_data/uncaged_predation_models/f10b6.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10b6)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10b6, depth=2, prob=0.95)
+plot(precis(f10b6, prob=0.95))
+```
+
+*f10b7   i + treepc1 + nathab_c + woodpeckerMA_c*
+```{r, eval = FALSE}
+f10b7<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bnathab*nathab_c + bwoodMA*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bnathab ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10b7, "f10b7.rds")
+```
+
+```{r}
+f10b7<-readRDS("./predation_data/uncaged_predation_models/f10b7.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10b7)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10b7, depth=2, prob=0.95)
+plot(precis(f10b7, prob=0.95))
+```
+
+*f10b8   i + treepc1 + nathab_cxwoodpeckerMA_c*
+```{r, eval = FALSE}
+f10b8<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bnathab*nathab_c + bwoodMA*woodpeckerMA_c + bnathabxwoodMA*nathab_c*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bnathab ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    bnathabxwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10b8, "f10b8.rds")
+```
+
+```{r}
+f10b8<-readRDS("./predation_data/uncaged_predation_models/f10b8.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10b8)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10b8, depth=2, prob=0.95)
+plot(precis(f10b8, prob=0.95))
+```
+
+*f10c   i + seminat_c  (oak, riparian, grassland, planted)*
+```{r, eval = FALSE}
+f10c<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bseminat*seminat_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bseminat ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10c, "f10c.rds")
+```
+
+```{r}
+f10c<-readRDS("./predation_data/uncaged_predation_models/f10c.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10c)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precf10c<-precis(f10c, depth=2, prob=0.95)
+precf10c
+plot(precis(f10c, prob=0.95))
+```
+
+*f10cc   i + seminat_c + seminat_c^2 (oak, riparian, grassland,planted)*
+```{r, eval = FALSE}
+ustan$seminat_c2 <- (ustan$seminat_c)^2
+
+f10cc<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bseminat*seminat_c + bseminat2*seminat_c2,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bseminat ~ dnorm(0,1),
+    bseminat2 ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10cc, "f10cc.rds")
+```
+
+```{r}
+f10cc<-readRDS("./predation_data/uncaged_predation_models/f10cc.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10cc)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10cc, depth=2, prob=0.95)
+plot(precis(f10cc, prob=0.95))
+```
+
+*f10c1   i + seminat_c + lpredMA_c*
+```{r, eval = FALSE}
+f10c1<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bseminat*seminat_c + bpredMA*lpredMA_c ,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bseminat ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10c1, "f10c1.rds")
+```
+
+```{r}
+f10c1<-readRDS("./predation_data/uncaged_predation_models/f10c1.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10c1)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10c1, depth=2, prob=0.95)
+plot(precis(f10c1, prob=0.95))
+```
+
+*f10c2   i + seminat_c x lpredMA_c*
+```{r, eval = FALSE}
+f10c2<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] +bseminat*seminat_c + bpredMA*lpredMA_c + bseminatxpredMA*seminat_c*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bseminat ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    bseminatxpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10c2, "f10c2.rds")
+```
+
+```{r}
+f10c2<-readRDS("./predation_data/uncaged_predation_models/f10c2.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10c2)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10c2, depth=2, prob=0.95)
+plot(precis(f10c2, prob=0.95))
+```
+
+*f10c3   i + seminat_c + woodpeckerMA_c*
+```{r, eval = FALSE}
+f10c3<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bseminat*seminat_c + bwoodMA*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bseminat ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10c3, "f10c3.rds")
+```
+
+```{r}
+f10c3<-readRDS("./predation_data/uncaged_predation_models/f10c3.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10c3)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10c3, depth=2, prob=0.95)
+plot(precis(f10c3, prob=0.95))
+```
+
+*f10c4   i + seminat_c x woodpeckerMA_c*
+```{r, eval = FALSE}
+f10c4<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bseminat*seminat_c + bwoodMA*woodpeckerMA_c + bseminatxwoodMA*seminat_c*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bseminat ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    bseminatxwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10c4, "f10c4.rds")
+```
+
+```{r}
+f10c4<-readRDS("./predation_data/uncaged_predation_models/f10c4.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10c4)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10c4, depth=2, prob=0.95)
+plot(precis(f10c4, prob=0.95))
+```
+
+*f10c5   i + treepc1 + seminat_c + lpredMA_c*
+```{r, eval = FALSE}
+f10c5<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bseminat*seminat_c + bpredMA*lpredMA_c ,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bseminat ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10c5, "f10c5.rds")
+```
+
+```{r}
+f10c5<-readRDS("./predation_data/uncaged_predation_models/f10c5.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10c5)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10c5, depth=2, prob=0.95)
+plot(precis(f10c5, prob=0.95))
+```
+
+*f10c6   i + treepc1 + seminat_c x lpredMA_c*
+```{r, eval = FALSE}
+f10c6<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bseminat*seminat_c + bpredMA*lpredMA_c + bseminatxpredMA*seminat_c*lpredMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bseminat ~ dnorm(0,1),
+    bpredMA ~ dnorm(0,1),
+    bseminatxpredMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10c6, "f10c6.rds")
+```
+
+```{r}
+f10c6<-readRDS("./predation_data/uncaged_predation_models/f10c6.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10c6)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10c6, depth=2, prob=0.95)
+plot(precis(f10c6, prob=0.95))
+```
+
+*f10c7   i + treepc1 + seminat_c + woodpeckerMA_c*
+```{r, eval = FALSE}
+f10c7<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bseminat*seminat_c + bwoodMA*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bseminat ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10c7, "f10c7.rds")
+```
+
+```{r}
+f10c7<-readRDS("./predation_data/uncaged_predation_models/f10c7.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10c7)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10c7, depth=2, prob=0.95)
+plot(precis(f10c7, prob=0.95))
+```
+
+*f10c8   i + treepc1 + seminat_cxwoodpeckerMA_c*
+```{r, eval = FALSE}
+f10c8<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bseminat*seminat_c + bwoodMA*woodpeckerMA_c + bseminatxwoodMA*seminat_c*woodpeckerMA_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bseminat ~ dnorm(0,1),
+    bwoodMA ~ dnorm(0,1),
+    bseminatxwoodMA ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10c8, "f10c8.rds")
+```
+
+```{r}
+f10c8<-readRDS("./predation_data/uncaged_predation_models/f10c8.rds")
+```
+
+```{r, eval=FALSE}
+plot(f10c8)
+```
+
+```{r, fig.width=4, fig.height=3, message=FALSE}
+precis(f10c8, depth=2, prob=0.95)
+plot(precis(f10c8, prob=0.95))
+```
+
+Compare landscape models
+```{r, eval=FALSE}
+compare(f10a, f10a1, f10a2, f10a3, f10a4, f10a5, f10a6, f10a7, f10a8,
+        f10b, f10b1, f10b2, f10b3, f10b4, f10b5, f10b6, f10b7, f10b8,
+        f10c, f10c1, f10c2, f10c3, f10c4, f10c5, f10c6, f10c7, f10c8)
+```
+f10c8 (after controlling for treepc1, lpreds and woodpeckers interact with each of the different landscape types to some degree)
+
+*Full WAIC model comparison*
+
+Bring in all saved models
+```{r}
+f0<-readRDS("./predation_data/uncaged_predation_models/f0.rds")
+f1<-readRDS("./predation_data/uncaged_predation_models/f1.rds")
+f1a<-readRDS("./predation_data/uncaged_predation_models/f1a.rds")
+f1b<-readRDS("./predation_data/uncaged_predation_models/f1b.rds")
+f1c<-readRDS("./predation_data/uncaged_predation_models/f1c.rds")
+f1d<-readRDS("./predation_data/uncaged_predation_models/f1d.rds")
+f2<-readRDS("./predation_data/uncaged_predation_models/f2.rds")
+f3<-readRDS("./predation_data/uncaged_predation_models/f3.rds")
+f4<-readRDS("./predation_data/uncaged_predation_models/f4.rds")
+f4a<-readRDS("./predation_data/uncaged_predation_models/f4a.rds")
+f4b<-readRDS("./predation_data/uncaged_predation_models/f4b.rds")
+f4c<-readRDS("./predation_data/uncaged_predation_models/f4c.rds")
+f4d<-readRDS("./predation_data/uncaged_predation_models/f4d.rds")
+f4e<-readRDS("./predation_data/uncaged_predation_models/f4e.rds")
+f4f<-readRDS("./predation_data/uncaged_predation_models/f4f.rds")
+f4g<-readRDS("./predation_data/uncaged_predation_models/f4g.rds")
+f4h<-readRDS("./predation_data/uncaged_predation_models/f4h.rds")
+f4i<-readRDS("./predation_data/uncaged_predation_models/f4i.rds")
+f4j<-readRDS("./predation_data/uncaged_predation_models/f4j.rds")
+f5<-readRDS("./predation_data/uncaged_predation_models/f5.rds")
+f5a<-readRDS("./predation_data/uncaged_predation_models/f5a.rds")
+f5b<-readRDS("./predation_data/uncaged_predation_models/f5b.rds")
+f5c<-readRDS("./predation_data/uncaged_predation_models/f5c.rds")
+f5d<-readRDS("./predation_data/uncaged_predation_models/f5d.rds")
+f5e<-readRDS("./predation_data/uncaged_predation_models/f5e.rds")
+f5f<-readRDS("./predation_data/uncaged_predation_models/f5f.rds")
+f5g<-readRDS("./predation_data/uncaged_predation_models/f5g.rds")
+f5h<-readRDS("./predation_data/uncaged_predation_models/f5h.rds")
+f5i<-readRDS("./predation_data/uncaged_predation_models/f5i.rds")
+f5j<-readRDS("./predation_data/uncaged_predation_models/f5j.rds")
+f5k<-readRDS("./predation_data/uncaged_predation_models/f5k.rds")
+f5l<-readRDS("./predation_data/uncaged_predation_models/f5l.rds")
+f5m<-readRDS("./predation_data/uncaged_predation_models/f5m.rds")
+f6a <-readRDS("./predation_data/uncaged_predation_models/f6a.rds") 
+f6a1 <-readRDS("./predation_data/uncaged_predation_models/f6a1.rds")
+f6a2 <-readRDS("./predation_data/uncaged_predation_models/f6a2.rds")
+f6a4 <-readRDS("./predation_data/uncaged_predation_models/f6a4.rds")
+f6a4a <-readRDS("./predation_data/uncaged_predation_models/f6a4a.rds") 
+f6a5 <-readRDS("./predation_data/uncaged_predation_models/f6a5.rds")
+f6b <-readRDS("./predation_data/uncaged_predation_models/f6b.rds") 
+f6b1 <-readRDS("./predation_data/uncaged_predation_models/f6b1.rds") 
+f7 <-readRDS("./predation_data/uncaged_predation_models/f7.rds")
+f7a <-readRDS("./predation_data/uncaged_predation_models/f7a.rds") 
+f7b <-readRDS("./predation_data/uncaged_predation_models/f7b.rds") 
+f8a <-readRDS("./predation_data/uncaged_predation_models/f8a.rds") 
+f8a1 <-readRDS("./predation_data/uncaged_predation_models/f8a1.rds")
+f8a2 <-readRDS("./predation_data/uncaged_predation_models/f8a2.rds")
+f8a3 <-readRDS("./predation_data/uncaged_predation_models/f8a3.rds")
+f8a4 <-readRDS("./predation_data/uncaged_predation_models/f8a4.rds") 
+f8b <-readRDS("./predation_data/uncaged_predation_models/f8b.rds")
+f8b1 <-readRDS("./predation_data/uncaged_predation_models/f8b1.rds")
+f8b2 <-readRDS("./predation_data/uncaged_predation_models/f8b2.rds")
+f9 <-readRDS("./predation_data/uncaged_predation_models/f9.rds") 
+f9a <-readRDS("./predation_data/uncaged_predation_models/f9a.rds")
+f9b  <-readRDS("./predation_data/uncaged_predation_models/f9b.rds")
+f9c <-readRDS("./predation_data/uncaged_predation_models/f9c.rds")
+f9d  <-readRDS("./predation_data/uncaged_predation_models/f9d.rds")
+f10a <-readRDS("./predation_data/uncaged_predation_models/f10a.rds")
+f10aa <-readRDS("./predation_data/uncaged_predation_models/f10aa.rds")
+f10a1 <-readRDS("./predation_data/uncaged_predation_models/f10a1.rds")
+f10a2 <-readRDS("./predation_data/uncaged_predation_models/f10a2.rds")
+f10a3 <-readRDS("./predation_data/uncaged_predation_models/f10a3.rds")
+f10a4 <-readRDS("./predation_data/uncaged_predation_models/f10a4.rds")
+f10a5 <-readRDS("./predation_data/uncaged_predation_models/f10a5.rds")
+f10a6 <-readRDS("./predation_data/uncaged_predation_models/f10a6.rds")
+f10a7 <-readRDS("./predation_data/uncaged_predation_models/f10a7.rds")
+f10a8 <-readRDS("./predation_data/uncaged_predation_models/f10a8.rds")
+f10b <-readRDS("./predation_data/uncaged_predation_models/f10b.rds")
+f10bb <-readRDS("./predation_data/uncaged_predation_models/f10bb.rds")
+f10b1<-readRDS("./predation_data/uncaged_predation_models/f10b1.rds")
+f10b2<-readRDS("./predation_data/uncaged_predation_models/f10b2.rds")
+f10b3<-readRDS("./predation_data/uncaged_predation_models/f10b3.rds")
+f10b4<-readRDS("./predation_data/uncaged_predation_models/f10b4.rds")
+f10b5<-readRDS("./predation_data/uncaged_predation_models/f10b5.rds")
+f10b6<-readRDS("./predation_data/uncaged_predation_models/f10b6.rds")
+f10b7<-readRDS("./predation_data/uncaged_predation_models/f10b7.rds")
+f10b8<-readRDS("./predation_data/uncaged_predation_models/f10b8.rds")
+f10c  <-readRDS("./predation_data/uncaged_predation_models/f10c.rds")
+f10cc <-readRDS("./predation_data/uncaged_predation_models/f10cc.rds") 
+f10c1 <-readRDS("./predation_data/uncaged_predation_models/f10c1.rds") 
+f10c2 <-readRDS("./predation_data/uncaged_predation_models/f10c2.rds")
+f10c3 <-readRDS("./predation_data/uncaged_predation_models/f10c3.rds") 
+f10c4 <-readRDS("./predation_data/uncaged_predation_models/f10c4.rds") 
+f10c5 <-readRDS("./predation_data/uncaged_predation_models/f10c5.rds") 
+f10c6 <-readRDS("./predation_data/uncaged_predation_models/f10c6.rds") 
+f10c7 <-readRDS("./predation_data/uncaged_predation_models/f10c7.rds")
+f10c8 <-readRDS("./predation_data/uncaged_predation_models/f10c8.rds") 
+```
+
+Univariate comparisons
+```{r}
+compare(f0, f1, f2, f3, f4, f5, f6a, f6b, f7, f8a, f8b, f9, f10a, f10b, f10c)
+```
+treepc1 takes all WAIC weight
+
+```{r}
+coeftab(f0, f1, f2, f3, f4, f5, f6a, f6b, f7, f8a, f8b, f9, f10a, f10b, f10c)
+```
+
+Compare all
+```{r}
+compare(f0 , f1 , f1a , f1b , f1c , f1d , f2 , f3 , f4  , f4a , f4b , f4c , f4d , f4e , f4f  , f4g , f4h , f4i  , f4j  , f5 , f5a, f5b, f5c, f5d, f5e, f5f, f5g, f5h, f5i, f5j , f5k , f5l , f5m, f6a, f6a1, f6a2, f6a4, f6a4a, f6a5, f6b, f6b1, f7, f7a, f7b, f8a, f8a1, f8a2, f8a3, f8a4, f8b, f8b1, f8b2, f9, f9a, f9b, f9c, f9d, f10a, f10aa , f10a1 , f10a2 , f10a3 , f10a4 , f10a5 , f10a6 , f10a7 , f10a8 , f10b , f10bb, f10b1 , f10b2 , f10b3 , f10b4 , f10b5 , f10b6 , f10b7 , f10b8 , f10c , f10cc, f10c1 , f10c2 , f10c3 , f10c4 , f10c5 , f10c6 , f10c7 , f10c8)
+```
+
+Woodpecker maximum abundance (vs the very similar lpred) and seminatural (vs either nathab or woodland) had the highest WAIC weight.
+
+However... beyond models containing seminat x woodpecker (the top model when all compared) there is some support for other combinations. Curious including only each of the following predictor combos:
+1. seminat & lpred
+2. woodland & lpred
+3. woodland & woodpecker
+4. nathab & lpred
+5. nathab & woodpecker
+
+1. seminat & lpred
+```{r, eval=FALSE}
+compare(f0 , f1 , f1a , f1b , f2 ,  f4  , f4a , f4b ,  f4e , f4f  , f4g , f4h , f4i  , f4j  , f5 , f5a, f5b, f5e,  f5g, f5h, f5i, f5j , f5k , f5l , f5m, f6a, f6a1, f6a2, f6a5, f6b, f6b1, f7, f7a, f8a, f8a1, f8a2, f8b, f8b1, f8b2, f9, f9a, f9b, f10c , f10cc, f10c1 , f10c2 , f10c5 , f10c6)
+```
+
+f10c6 has WAIC weight of 0.43, quite a bit more then next model (0.17). After controlling for the positive effect of treepc1, likely predators have a strong positive effect, regardless of seminat. Seminat is proably included here because of overfitting (?)
+```{r, fig.width=4, fig.height=2, message=FALSE, eval=FALSE}
+precis(f10c6, prob=0.95)
+plot(precis(f10c6, prob=0.95))
+```
+
+2. woodland & lpred
+```{r, eval=FALSE}
+compare(f0 , f1 , f1a , f1b , f2 ,  f4  , f4a , f4b ,  f4e , f4f  , f4g , f4h , f4i  , f4j  , f5 , f5a, f5b, f5e,  f5g, f5h, f5i, f5j , f5k , f5l , f5m, f6a, f6a1, f6a2, f6a5, f6b, f6b1, f7, f7a, f8a, f8a1, f8a2, f8b, f8b1, f8b2, f9, f9a, f9b, f10a , f10aa, f10a1 , f10a2 , f10a5 , f10a6)
+```
+
+f10a5 and f10a6 have the highest WAIC weight (0.25, 0.23, respectively). Once controlling for treepc1, woodland cover in landscape has a negative effect and lpreds have postive effect on predation (all 95% ci do not overlap zero), & the same except no effect of the interaction between woodland and predators. (overfitting, yes?)
+```{r, fig.width=4, fig.height=2, message=FALSE, eval=FALSE}
+precis(f10a5, prob=0.95); precis(f10a6, prob=0.95)
+plot(precis(f10a5, prob=0.95)); plot(precis(f10a6, prob=0.95))
+```
+
+3. woodland & woodpecker
+```{r, eval=FALSE}
+compare(f0 , f1 , f1c , f1d , f3 , f4  , f4c , f4d , f4e , f4f  , f4g , f4h , f4i  , f4j  , f5 , f5c, f5d, f5f, f5g, f5h, f5i, f5j , f5k , f5l , f5m, f6a, f6a4, f6a5, f6b, f7, f7b, f8a, f8a3, f8a4, f8b, f9, f9c, f9d , f10a , f10aa, f10a3 , f10a4 , f10a7 , f10a8)
+```
+
+10a7, and 10a8 have weights of 0.33 and 0.29, respectively. After controlling for treepc1, woodland has a strong negative and woodpeckers have a strong positive effect on predation. There is no interactive effect, though (overfitting?)
+```{r, fig.width=4, fig.height=2, message=FALSE, eval=FALSE}
+precis(f10a7, prob=0.95); precis(f10a8, prob=0.95)
+plot(precis(f10a7, prob=0.95)); plot(precis(f10a8, prob=0.95))
+```
+
+4. nathab & lpred
+```{r, eval=FALSE}
+compare(f0 , f1 , f1a , f1b , f2 ,  f4  , f4a , f4b ,  f4e , f4f  , f4g , f4h , f4i  , f4j  , f5 , f5a, f5b, f5e,  f5g, f5h, f5i, f5j , f5k , f5l , f5m, f6a, f6a1, f6a2, f6a5, f6b, f6b1, f7, f7a, f8a, f8a1, f8a2, f8b, f8b1, f8b2, f9, f9a, f9b, f10b , f10bb, f10b1 , f10b2 , f10b5 , f10b6)
+```
+
+f10b6 and f5i have 0.30 and 0.21 WAIC weight, respectively. After controlling for treepc1, and natural habitat (no effect), lpredMA have a significant effect on predation, with a tendency toward more predation in landscape with lower nathab cover (hi 95% ci = 0.00). Also, predation once controlling for postivie effect of treepc1, interior orchards have higher predation, and there tends to be a positive effect of codling moth density on predation (overlaps 0 slightly).
+```{r, fig.width=4, fig.height=2, message=FALSE, eval=FALSE}
+precis(f10b6, prob=0.95); precis(f5i, prob=0.95)
+plot(precis(f10b6, prob=0.95)); plot(precis(f5i, prob=0.95))
+```
+
+5. nathab & woodpecker
+```{r, eval=FALSE}
+compare(f0 , f1 , f1c , f1d , f3 , f4  , f4c , f4d , f4e , f4f  , f4g , f4h , f4i  , f4j  , f5 , f5c, f5d, f5f, f5g, f5h, f5i, f5j , f5k , f5l , f5m, f6a, f6a4, f6a5, f6b, f7, f7b, f8a, f8a3, f8a4, f8b, f9, f9c, f9d , f10b , f10bb, f10b3 , f10b4 , f10b7 , f10b8)
+```
+
+f10b8 has the lowest WAIC and the highest WAIC weight (0.43), with the next model carrying 0.17 WAIC weight. After controlling treepc1, the effect of woodpeckers had a strong positive effect on predation, and there was an interaction with natural habitat cover in the landscape in which the lower the landscape cover the higher the effect of woodpeckers.
+```{r, fig.width=4, fig.height=2, message=FALSE, eval=FALSE}
+precis(f10b8, prob=0.95)
+plot(precis(f10b8, prob=0.95))
+```
+
+I feel comfortable sticking with seminatural cover and woodpecker as these have the strongest support, but the other results can be discussed in the discussion and appendix in an interesting way. 
+For Appendix S2 WAIC figure, compare only semi-natural habitat but with both woodpeckers and lpred
+
+#Main Takeaways:
+1. No models that did not contain treepc1 had any WAIC weight > 0.00.
+2. Top Model. Once controlling for the effects of walnut tree characteristics, the affects of woodpecker max abundance on predation is moderated by seminatural cover in the landscape
+3. Woodpecker vs. all likely predator models tend to perform better, and the difference between the top and next best model dWAIC exceeds the standard deviation of the difference. 
+4. There is little support for bird and walnut tree characteristics models when landscape components are also not included.
+5. Once controlling for the effect of the other two, orchard loca, treepc1, and cm density all have affects on predation
+6. Orchard location in particular is present in several weighted models, but they carry < 0.05 of the model weights indicating a good deal of uncertainty.
+7. There is no support for the effects of margin vegetation type or margin vegetation characteristics (even when we control for the effects of treepc1).
+8. There is no support for the effects of the proportion of trees with codling moths (even when we control for the effects of treepc1).
+
+From the several correlated and inclusive measures for landscape cover and avian predator, I select woodpecker and seminatural cover which includes oak and riparian woodland, grassland, and planted woody vegetation. 
+
+**Jump to line 3325 (Alt + shift + G)**
+
+###*Detour: Double check seminatural landscape cover x margin habitat interaction*
+*NOTE: I had originally not included a landscape x margin habitat interaction (i.e., my original idea for testing the Intermediate Landscape Complexity Hypothesis) in this proposed set of models because during data exploration, the two were highly correlated. But after going through the above stages, I wanted to investigate it more throughly just in case, and thus went on this following detour:* 
+
+*NOTE: The following seminat x hab model predicts the opposite behavior for habitat orchards than the aggregated raw data and thus even though it was "well supported" via WAIC and ROC, I did not included it in the final model set for either my dissertation or paper. Perhaps because of the high correlation between presence of habitat orchard and seminatural habiat cover (because margin edges are included in this)?* 
+
+*i + treepc1 + seminat + hab + seminat x hab* 
+```{r, eval = FALSE}
+f10c9<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bseminat*seminat_c + bhab*hab + bseminatxhab*seminat_c*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bseminat ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    bseminatxhab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10c9, "f10c9.rds")
+```
+
+```{r}
+f10c9<-readRDS("./predation_data/uncaged_predation_models/f10c9.rds")
+plot(f10c9)
+precis(f10c9, depth=2, prob=0.95)
+plot(precis(f10c9, prob=0.95))
+```
+
+*i + treepc1 + seminat + hab * 
+```{r, eval = FALSE}
+f10c9a<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bseminat*seminat_c + bhab*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bseminat ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10c9a, "f10c9a.rds")
+```
+
+```{r}
+f10c9a<-readRDS("./predation_data/uncaged_predation_models/f10c9a.rds")
+plot(f10c9a)
+precis(f10c9a, depth=2, prob=0.95)
+plot(precis(f10c9a, prob=0.95))
+```
+
+*Note: I inadvertently left these next two models (f10c9b and f10c9c) out of my final WAIC model comparison and ensemble prediction in my dissertation analysis, likely because I threw out all fa10c9 models thinking they were all this broken marghab x seminat setand then did a quick and easy post-hoc instead. For the submitted paper version, I am including these and the final model set results change somewhat.*
+
+*i + treepc1 + seminat * 
+```{r, eval = FALSE}
+f10c9b<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bseminat*seminat_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bseminat ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10c9b, "f10c9b.rds")
+```
+
+```{r}
+f10c9b<-readRDS("./predation_data/uncaged_predation_models/f10c9b.rds")
+plot(f10c9b)
+precis(f10c9b, depth=2, prob=0.95)
+plot(precis(f10c9b, prob=0.95))
+```
+
+*i + treepc1 + seminat + seminat x treepc1* 
+```{r, eval = FALSE}
+f10c9c<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + btpc1*treepc1 + bseminat*seminat_c +  btpc1xseminat*treepc1*seminat_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    btpc1 ~ dnorm(0,1),
+    bseminat ~ dnorm(0,1),
+    btpc1xseminat ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10c9c, "f10c9c.rds")
+```
+
+```{r}
+f10c9c<-readRDS("./predation_data/uncaged_predation_models/f10c9c.rds")
+plot(f10c9c)
+precis(f10c9c, depth=2, prob=0.95)
+plot(precis(f10c9c, prob=0.95))
+```
+
+*i + seminat + hab* 
+```{r, eval = FALSE}
+f10c9d<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bseminat*seminat_c + bhab*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bseminat ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10c9d, "f10c9d.rds")
+```
+
+```{r}
+f10c9d<-readRDS("./predation_data/uncaged_predation_models/f10c9d.rds")
+plot(f10c9d)
+precis(f10c9d, depth=2, prob=0.95)
+plot(precis(f10c9d, prob=0.95))
+```
+
+*i + seminat + hab + seminat x hab* 
+```{r, eval = FALSE}
+f10c9e<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bseminat*seminat_c + bhab*hab + bseminatxhab*seminat_c*hab,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bseminat ~ dnorm(0,1),
+    bhab ~ dnorm(0,1),
+    bseminatxhab ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2) 
+
+#saveRDS(f10c9e, "f10c9e.rds")
+```
+
+```{r}
+f10c9e<-readRDS("./predation_data/uncaged_predation_models/f10c9e.rds")
+plot(f10c9e)
+precis(f10c9e, depth=2, prob=0.95)
+plot(precis(f10c9e, prob=0.95))
+```
+
+```{r, eval=FALSE}
+detourcompare <- compare(f0 , f1 , f1c , f1d , f3 , f4  , f4c , f4d , f4e , f4f  , f4g , f4h , f5 , f5c, f5d, f5f, f5g, f5h, f5i, f5j,f5k , f5l , f5m, f6a, f6a4, f6a4a, f6a5, f7, f7b, f8a, f8a3, f8a4, f8b, f9, f9c, f9d , f10c , f10cc, f10c3 , f10c4 , f10c7 , f10c8, f10c9,f10c9a,f10c9b, f10c9c, f10c9d, f10c9e)
+detourcompare
+```
+
+With this interaction (f10c9) included and compared to other models, has WAIC weight of 0.55, quite a bit more then next model (0.27): After controlling for the positive effect of treepc1, margin habitat has a negative effect on predation, and this effect is stronger in landscapes with less seminatural habitat cover. Huh; seems not right.
+```{r, fig.width=4, fig.height=2, message=FALSE}
+f10c9<-readRDS("./predation_data/uncaged_predation_models/f10c9e.rds")
+precis(f10c9, prob=0.95)
+plot(precis(f10c9, prob=0.95))
+```
+
+Predictive plots for evaluating seminat x marginhabitat in detour model set. Prediction without model averaging
+```{r}
+treepc1.seq<-seq(-0.4547025, 0.7627313, length.out=100)
+seminat.seq<-seq(0,38, length.out=100)
+seminat_c.seq<-seq(-7.948576 ,30.051424, length.out=100)
+ss<-cbind(seminat.seq, seminat_c.seq)
+
+clean_seminat_pred <-list( 
+  hab = rep(0,100),     #clean
+  treepc1 = rep(mean(treepc1.seq),100), 
+  seminat_c = seminat.seq,
+  orch = rep(2,100) # placeholder
+)
+
+habitat_seminat_pred <-list( 
+  hab = rep(1,100),     #habitat
+  treepc1 = rep(mean(treepc1.seq),100), 
+  seminat_c = seminat.seq,
+  orch = rep(2,100) # placeholder
+)
+
+a_orch_zeros<-matrix(0,2000,20)
+
+clean.f10c9.pred<- link(f10c9,n=2000, data = clean_seminat_pred, replace=list(a_orch = a_orch_zeros))
+habitat.f10c9.pred<- link(f10c9,n=2000,data=habitat_seminat_pred, replace=list(a_orch = a_orch_zeros))
+
+clean.f10c9.pred.mean <- apply(clean.f10c9.pred, 2, mean)
+clean.f10c9.pred.PI <- apply(clean.f10c9.pred, 2, PI, prob = 0.95)
+
+habitat.f10c9.pred.mean <- apply(habitat.f10c9.pred, 2, mean)
+habitat.f10c9.pred.PI <- apply(habitat.f10c9.pred, 2, PI, prob = 0.95)
+
+# Ggplot2 data frame of prediction data
+mean<-clean.f10c9.pred.mean
+lo<-clean.f10c9.pred.PI[1,]
+hi<-clean.f10c9.pred.PI[2,]
+clean.f10c9.predict<-data.frame(seminat.seq, mean, lo, hi)
+
+mean<-habitat.f10c9.pred.mean
+lo<-habitat.f10c9.pred.PI[1,]
+hi<-habitat.f10c9.pred.PI[2,]
+habitat.f10c9.predict<-data.frame(seminat.seq, mean, lo, hi)
+
+clean.f10c9.predict$margtype<-c("Clean")
+habitat.f10c9.predict$margtype<-c("Habitat")
+```
+
+Per orchard observations
+```{r}
+utest<- d1%>% 
+  dplyr::select(orch, hab, pred, seminat_c) %>%
+    group_by(orch, hab) %>%
+  summarize(ppred = mean(pred),
+           mseminat= mean(seminat_c)) %>%
+  dplyr::select(orch, hab, mseminat, ppred)
+
+utest$hab=as.factor(utest$hab)
+cleantest<-utest %>% filter(hab == 0)
+habtest<-utest %>% filter(hab == 1)
+```
+
+```{r}
+clean_seminat <-
+  ggplot(data=clean.f10c9.predict, aes(x=seminat_c.seq, y=mean, type="n")) +
+  geom_ribbon(data=clean.f10c9.predict, aes(x = seminat_c.seq,ymin=lo, ymax=hi),
+              alpha=0.05) +
+  geom_line(data=clean.f10c9.predict, aes(x = seminat_c.seq, y=mean), 
+            size = 0.5,linetype ="solid") +
+  geom_point(data = cleantest, aes(x=mseminat, y=ppred, col=hab)) +
+  ylim(0.00,1.00) +
+  theme_classic() +
+  theme(legend.key=element_blank()) +
+  theme(axis.text.y=element_text(size=20, colour="black"),
+        axis.text.x=element_blank(),
+        axis.title.y=element_text(size=28, colour ="black", margin = margin(t = 0, r = 5, b = 0, l = 0, "mm")),
+        axis.title.x=element_blank()) +
+        scale_x_continuous(breaks=c(-7.9485760,2.0312220, 12.0110200, 21.9908179),#centered seminat 
+                     labels=c("0",  "10",  "20",   "30")) + #obs seminat
+  ylab("Proportion predation") +
+xlab("seminatural cover") 
+
+habitat_seminat <-
+  ggplot(data=habitat.f10c9.predict, aes(x=seminat_c.seq, y=mean, type="n")) +
+  geom_ribbon(data=habitat.f10c9.predict, aes(x = seminat_c.seq,ymin=lo, ymax=hi),
+              fill="blue", alpha=0.05) +
+  geom_line(data=habitat.f10c9.predict, aes(x = seminat_c.seq, y=mean), 
+            col="blue", size = 0.5,linetype ="solid") +
+  geom_point(data = habtest, aes(x=mseminat, y=ppred, col=hab)) +
+    ylim(0.00,1.00) +
+  theme_classic() +
+  theme(legend.key=element_blank()) +
+  theme(axis.text.y=element_text(size=20, colour="black"),
+        axis.text.x=element_text(size=28, colour="black"),
+        axis.title.y=element_text(size=28, colour ="black", margin = margin(t = 0, r = 5, b = 0, l = 0, "mm")),
+        axis.title.x=element_text(size=28, colour ="black", margin = margin(t = 5, r = 0, b = 0, l = 0, "mm"))) +
+        scale_x_continuous(breaks=c(-7.9485760,2.0312220, 12.0110200, 21.9908179),#centered seminat 
+                     labels=c("0",  "10",  "20",   "30")) + #obs seminat here
+  ylab("Proportion predation") +
+   xlab("Semi-natural Cover (%)")
+clean_seminat; habitat_seminat
+```
+Predictions for habitat orchards are opposite of observed data.
+
+Something is not right here see these predictions versus this:
+```{r}
+ggplot(data=utest, aes(x=mseminat, y=ppred, group=hab)) +
+  geom_point(aes(x=mseminat, y=ppred, col=hab)) +
+  geom_smooth(aes(x=mseminat, y=ppred, col=hab, fill=hab), method="glm")
+```
+This plot is very very different from the predictions of f10c9. 
+This model is broken. See notes above. I'm pulling it and going back to the previous results. We can't test habXseminat.
+
+#####*End seminat x marginhabitat detour here*
+
+
+Additional Analysis for publication
+I inadvertantly left out this model from dissertation analyses
+
+*i + treepc1 x seminat + woopecker ab*
+```{r, eval = FALSE}
+f4tpc2<- map2stan(
+  alist(
+    pred ~ dbinom(n,p),
+    logit(p) <- a + a_orch[orch] + bwoodMA*woodpeckerMA_c + btpc1*treepc1 + bseminat*seminat_c + btpc1xbseminat*treepc1*seminat_c,
+    a_orch[orch] ~ dnorm(0, sigma_orch),
+    a ~ dnorm(0,10),
+    bwoodMA ~ dnorm(0,1),
+    btpc1 ~ dnorm(0,1),
+    bseminat ~ dnorm(0,1),
+    btpc1xbseminat ~ dnorm(0,1),
+    sigma_orch ~ dcauchy(0,1) ), 
+  data = ustan, warmup = 2000, iter=5000, chains = 3, cores = 2)
+
+#saveRDS(f4tpc2, "f4tpc2.rds")
+```
+
+```{r}
+f4tpc2<-readRDS("./predation_data/uncaged_predation_models/f4tpc2.rds")
+```
+
+```{r, , fig.width=7, fig.height=7, message=FALSE}
+plot(f4tpc2)
+```
+
+```{r}
+precf4tpc2<-precis(f4tpc2, depth=2, prob=0.95)
+precf4tpc2
+plot(precis(f4tpc2, prob=0.95))
+```
+
+**Appendix 2: Table S6**
+
+Bring in all saved models
+```{r}
+f0<-readRDS("./predation_data/uncaged_predation_models/f0.rds")
+f1<-readRDS("./predation_data/uncaged_predation_models/f1.rds")
+f1c<-readRDS("./predation_data/uncaged_predation_models/f1c.rds")
+f1d<-readRDS("./predation_data/uncaged_predation_models/f1d.rds")
+f3<-readRDS("./predation_data/uncaged_predation_models/f3.rds")
+f4<-readRDS("./predation_data/uncaged_predation_models/f4.rds")
+f4c<-readRDS("./predation_data/uncaged_predation_models/f4c.rds")
+f4d<-readRDS("./predation_data/uncaged_predation_models/f4d.rds")
+f4e<-readRDS("./predation_data/uncaged_predation_models/f4e.rds")
+f4f<-readRDS("./predation_data/uncaged_predation_models/f4f.rds")
+f4g<-readRDS("./predation_data/uncaged_predation_models/f4g.rds")
+f4h<-readRDS("./predation_data/uncaged_predation_models/f4h.rds")
+f5<-readRDS("./predation_data/uncaged_predation_models/f5.rds")
+f5c<-readRDS("./predation_data/uncaged_predation_models/f5c.rds")
+f5d<-readRDS("./predation_data/uncaged_predation_models/f5d.rds")
+f5e<-readRDS("./predation_data/uncaged_predation_models/f5e.rds")
+f5f<-readRDS("./predation_data/uncaged_predation_models/f5f.rds")
+f5g<-readRDS("./predation_data/uncaged_predation_models/f5g.rds")
+f5h<-readRDS("./predation_data/uncaged_predation_models/f5h.rds")
+f5i<-readRDS("./predation_data/uncaged_predation_models/f5i.rds")
+f5j<-readRDS("./predation_data/uncaged_predation_models/f5j.rds")
+f5k<-readRDS("./predation_data/uncaged_predation_models/f5k.rds")
+f5l<-readRDS("./predation_data/uncaged_predation_models/f5l.rds")
+f5m<-readRDS("./predation_data/uncaged_predation_models/f5m.rds")
+f6a <-readRDS("./predation_data/uncaged_predation_models/f6a.rds") 
+f6a4 <-readRDS("./predation_data/uncaged_predation_models/f6a4.rds")
+f6a4a <-readRDS("./predation_data/uncaged_predation_models/f6a4a.rds") 
+f6a5 <-readRDS("./predation_data/uncaged_predation_models/f6a5.rds")
+f7 <-readRDS("./predation_data/uncaged_predation_models/f7.rds")
+f7b <-readRDS("./predation_data/uncaged_predation_models/f7b.rds") 
+f8a <-readRDS("./predation_data/uncaged_predation_models/f8a.rds") 
+f8a3 <-readRDS("./predation_data/uncaged_predation_models/f8a3.rds")
+f8a4 <-readRDS("./predation_data/uncaged_predation_models/f8a4.rds") 
+f8b <-readRDS("./predation_data/uncaged_predation_models/f8b.rds")
+f9 <-readRDS("./predation_data/uncaged_predation_models/f9.rds") 
+f9c <-readRDS("./predation_data/uncaged_predation_models/f9c.rds")
+f9d  <-readRDS("./predation_data/uncaged_predation_models/f9d.rds")
+f10c  <-readRDS("./predation_data/uncaged_predation_models/f10c.rds")
+f10cc <-readRDS("./predation_data/uncaged_predation_models/f10cc.rds") 
+f10c3 <-readRDS("./predation_data/uncaged_predation_models/f10c3.rds") 
+f10c4 <-readRDS("./predation_data/uncaged_predation_models/f10c4.rds") 
+f10c7 <-readRDS("./predation_data/uncaged_predation_models/f10c7.rds")
+f10c8 <-readRDS("./predation_data/uncaged_predation_models/f10c8.rds") 
+f10c9b <-readRDS("./predation_data/uncaged_predation_models/f10c9b.rds")
+f10c9c <-readRDS("./predation_data/uncaged_predation_models/f10c9c.rds")
+f4tpc2<-readRDS("./predation_data/uncaged_predation_models/f4tpc2.rds")
+```
+
+```{r, eval = FALSE}
+compareWAIC_Final_nocage_woodpecker_seminat_treepc1 <- compare(f0 , f1 , f1c , f1d , f3 , f4  , f4c , f4d , f4e , f4f  , f4g , f4h , f5 , f5c, f5d, f5f, f5g, f5h, f5i, f5j,f5k , f5l , f5m, f6a, f6a4, f6a4a, f6a5, f7, f7b, f8a, f8a3, f8a4, f8b, f9, f9c, f9d , f10c , f10cc, f10c3 , f10c4 , f10c7 , f10c8, f10c9b, f10c9c,  f4tpc2)
+
+write.table(compareWAIC_Final_nocage_woodpecker_seminat_treepc1@output, "clipboard", sep="\t", row.names=TRUE)
+```
+
+**Appendix 2: Table S7**
+
+Coefficients and critical intervals for Final weighted models
+```{r}
+f10c8 <- readRDS("./predation_data/uncaged_predation_models/f10c8.rds")
+f5i <- readRDS("./predation_data/uncaged_predation_models/f5i.rds")
+f10c7 <- readRDS("./predation_data/uncaged_predation_models/f10c7.rds")
+f5h <- readRDS("./predation_data/uncaged_predation_models/f5h.rds")
+f5g <- readRDS("./predation_data/uncaged_predation_models/f5g.rds")
+f5f <- readRDS("./predation_data/uncaged_predation_models/f5f.rds")
+f4tpc2<-readRDS("./predation_data/uncaged_predation_models/f4tpc2.rds")
+f10c9b <-readRDS("./predation_data/uncaged_predation_models/f10c9b.rds")
+f4d <- readRDS("./predation_data/uncaged_predation_models/f4d.rds")
+```
+
+```{r}
+coeffs_Final_nocage_woodpecker_seminat_treepc1<-coeftab(f10c8, f5i,f10c7, f5h, f5g, f5f, f4tpc2, f10c9b, f4d, rotate = TRUE)
+#saveRDS(coeffs_Final_nocage_woodpecker_seminat_treepc1, file = "coeffs_Final_nocage_woodpecker_seminat_treepc1.rds")
+```
+
+```{r}
+#All level effects
+write.table(coeffs_Final_nocage_woodpecker_seminat_treepc1@coefs, "clipboard", sep="\t", row.names=TRUE)
+
+#Main effects only:
+write.table(coeffs_Final_nocage_woodpecker_seminat_treepc1@coefs[,c(21:26,27:31)], "clipboard", sep="\t", row.names=TRUE)
+
+coeffs_Final_nocage_woodpecker_seminat_treepc1@coefs[,c(21:25,27:31)]
+```
+
+Coefficient Plots
+```{r, fig.width=4, fig.height=2, message=FALSE}
+plot(precis(f10c8, prob=0.95))
+plot(precis(f5i, prob=0.95))
+plot(precis(f10c7, prob=0.95))
+plot(precis(f5h, prob=0.95))
+plot(precis(f5g, prob=0.95))
+plot(precis(f5f, prob=0.95))
+plot(precis(f4tpc2, prob=0.95))
+plot(precis(f10c9b, prob=0.95))
+plot(precis(f4d, prob=0.95))
+```
+
+Credible intervals for parameters
+```{r, eval=FALSE, echo=FALSE}
+f10c8.prec <- precis(f10c8, prob=0.95)
+f5i.prec <- precis(f5i, prob=0.95)
+f10c7.prec <- precis(f10c7, prob=0.95)
+f5h.prec <- precis(f5h, prob=0.95)
+f5g.prec <- precis(f5g, prob=0.95)
+f5f.prec <- precis(f5f, prob=0.95)
+f4tpc2.prec <- precis(f4tpc2, prob=0.95)
+f10c9b.prec <- precis(f10c9b, prob=0.95)
+f4d.pred <- precis(f4d, prob=0.95)
+```
+
+Copy to excel spreadsheet
+```{r}
+write.table(f10c8.prec@output[1:5,1:4], "clipboard", sep="\t", row.names=TRUE)
+write.table(f5i.prec@output[1:5,1:4], "clipboard", sep="\t", row.names=TRUE)
+write.table(f10c7.prec@output[1:5,1:4], "clipboard", sep="\t", row.names=TRUE)
+write.table(f5h.prec@output[1:5,1:4], "clipboard", sep="\t", row.names=TRUE)
+write.table(f5g.prec@output[1:5,1:4], "clipboard", sep="\t", row.names=TRUE)
+write.table(f5f.prec@output[1:5,1:4], "clipboard", sep="\t", row.names=TRUE)
+write.table(f4tpc2.prec@output[1:5,1:4], "clipboard", sep="\t", row.names=TRUE)
+write.table(f10c9b.prec@output[1:5,1:4], "clipboard", sep="\t", row.names=TRUE)
+write.table(f4d.prec@output[1:5,1:4], "clipboard", sep="\t", row.names=TRUE)
+```
+
+*ROC/AUC*
+
+Call ensemble without specifying new data (see MacElreath page 132)
+```{r, eval = FALSE}
+final.raw.nocage.ensemble<- ensemble(f10c8, f5i,f10c7, f5h, f5g, f5f, f4tpc2, f10c9b, f4d)
+#saveRDS(final.raw.nocage.ensemble, "final.raw.nocage.ensemble.rds")
+```
+
+```{r}
+#paper.raw.nocage.ensemble<-readRDS("./predation_data/uncaged_predation_models/final.raw.nocage.ensemble.rds")
+mu.mean<-apply(final.raw.nocage.ensemble$link, 2, mean)
+mu.pi<-apply(final.raw.nocage.ensemble$link, 2, PI, prob= 0.95)
+```
+
+Compute AUC
+```{r}
+paper.ROC_uncaged.pred <- roc(ustan$pred, mu.mean, auc=TRUE, ci=TRUE, ci.method="bootstrap")
+paper.ROC_uncaged.pred.smooth <- roc(ustan$pred, mu.mean, auc=TRUE, smooth=TRUE, ci=TRUE, ci.method="bootstrap")
+```
+
+```{r}
+paper.ROC_uncaged.pred 
+paper.ROC_uncaged.pred.smooth
+```
+
+```{r, fig.height=5, fig.width=5, warning=FALSE}
+plot(paper.ROC_uncaged.pred.smooth, col="red", lwd=3, main="Uncaged predation analysis ensemble\n AUC = 0.90 (0.88-0.92)")
+```
+
+
+Predictions plots, model validations
+
+**Figure 5 : Uncaged figure treepc1 and orchard location**
+
+Fig5A : Treepc1
+
+New data table for prediction
+```{r, eval=FALSE}
+treepc1.seq<-seq(-0.4547025, 0.7627313, length.out=100)
+
+treepc1.pred.u <-list( 
+  treepc1 = treepc1.seq,
+  loc = rep(1,100),     #interior
+  cmnum_c = rep(round(mean(ustan$cmnum_c),2),100),       
+  seminat_c = rep(round(mean(ustan$seminat_c),2),100),
+  woodpeckerMA_c = rep(round(mean(ustan$woodpeckerMA_c),2),100),
+  orch = rep(2,100) # placeholder
+)
+```
+
+predict "average orchard" from final ensemble
+```{r, eval=FALSE}
+a_orch_zeros<-matrix(0,2000,20)
+
+final_treepc1_pred_ensemble<- ensemble(f10c8, f5i,f10c7, f5h, f5g, f5f, f4tpc2, f10c9b, f4d, 
+                      n=2000, data = treepc1.pred.u, replace=list(a_orch = a_orch_zeros))
+
+#saveRDS(final_treepc1_pred_ensemble, file="fFinal_treepc1_pred_ensemble.rds")
+```
+
+```{r, eval=FALSE}
+treepc1_pred_ensemble<-readRDS("./predation_data/uncaged_predation_models/final_treepc1_pred_ensemble.rds")
+pred.u.mean <- apply(treepc1_pred_ensemble$link, 2, mean)
+pred.u.PI <- apply(treepc1_pred_ensemble$link, 2, PI, prob = 0.95)
+```
+
+ggplot2 dataframes
+```{r, eval=FALSE}
+# prediction data
+trseq<-treepc1.seq
+pred.mean<-pred.u.mean
+lo.pred<-pred.u.PI[1,]
+hi.pred<-pred.u.PI[2,]
+
+pred.treepc1<-data.frame(trseq, pred.mean, lo.pred, hi.pred)
+#write.csv(pred.treepc1, "pred.treepc1_fig.csv")
+
+# per tree emperical data
+f<-data.frame(ustan$pred, ustan$treepc1)
+#write.csv(f, "pertree_emperical_data_treepc1_FIG.csv")
+```
+
+```{r, warning=FALSE, fig.width=7, fig.height=7, fig.align='center'}
+Fig.treepc1 <- 
+  ggplot(f, aes(x=ustan.treepc1, y=ustan.pred, type="n")) +
+  geom_point(data = f, aes(x=ustan.treepc1, y=ustan.pred), 
+                position=position_jitter(height=0.02, width=0), pch=16,alpha=0.50, col=skhpal[9]) + 
+  geom_line(data=pred.treepc1, aes(x=trseq, y=pred.mean), size = 1.5, linetype ="solid", col = skhpal[9]) +
+  geom_line(data=pred.treepc1, aes(x=trseq, y=lo.pred), size = 1, linetype ="dashed", col = skhpal[9]) +
+  geom_line(data=pred.treepc1, aes(x=trseq, y=hi.pred), size = 1, linetype ="dashed", col = skhpal[9]) +
+  scale_x_continuous(breaks=seq(0,0), labels = paste0(c(" 0 \nPC1"))) +
+  theme(legend.key=element_blank()) +
+  theme(axis.ticks.length = unit(1,"mm"),
+        axis.ticks.y = element_line(colour="black"),
+        axis.ticks.x = element_line(colour="black"),
+        axis.text.y = element_text(size=18, colour="black"), 
+        axis.title.y = element_text(size=20, margin = margin(t = 0, r = 7, b = 0, l = 0)),
+        axis.text.x = element_text(size=18, colour="black"),
+        axis.title.x = element_blank(),
+        plot.margin = unit(c(0.5,0.1,0.1,0.1),"cm"), 
+        plot.tag.position = c(0.20, 0.99),
+        plot.tag = element_text(size=20)) + 
+  labs(x = " ", y="Predation probability", tag = "A")
+Fig.treepc1
+```
+
+Fig 5B : Orchard location
+
+New data table for prediction
+```{r, eval = FALSE}
+e.orchloc.pred.u <-list( 
+  loc = rep(0,100),     #edge
+  cmnum_c = rep(mean(ustan$cmnum_c),100),
+  treepc1 = rep(mean(treepc1.seq), 100),
+  seminat_c = rep(mean(ustan$seminat_c),100),
+  woodpeckerMA_c = rep(mean(ustan$woodpeckerMA_c),100),
+  orch = rep(2,100) # placeholder
+)
+
+i.orchloc.pred.u <-list( 
+  loc = rep(1,100),     #interior
+  cmnum_c = rep(mean(ustan$cmnum_c),100),
+  treepc1 = rep(mean(treepc1.seq), 100),
+  seminat_c = rep(mean(ustan$seminat_c),100),
+  woodpeckerMA_c = rep(mean(ustan$woodpeckerMA_c),100),
+  orch = rep(2,100) # placeholder
+)
+```
+
+predict "average orchard" from ensemble
+```{r, eval=FALSE}
+a_orch_zeros<-matrix(0,2000,20)
+
+final_e_orchloc_pred_ensemble<- ensemble(f10c8, f5i,f10c7, f5h, f5g, f5f, f4tpc2, f10c9b, f4d,
+                      n=2000, data = e.orchloc.pred.u, replace=list(a_orch = a_orch_zeros))
+final_i_orchloc_pred_ensemble<- ensemble(f10c8, f5i,f10c7, f5h, f5g, f5f, f4tpc2, f10c9b, f4d,
+                      n=2000, data = i.orchloc.pred.u, replace=list(a_orch = a_orch_zeros))
+
+#saveRDS(final_e_orchloc_pred_ensemble, file="final_e_orchloc_pred_ensemble.rds")
+#saveRDS(final_i_orchloc_pred_ensemble, file="final_i_orchloc_pred_ensemble.rds")
+```
+
+```{r}
+e_orchloc_pred_ensemble <- readRDS(file="./predation_data/uncaged_predation_models/final_e_orchloc_pred_ensemble.rds")
+i_orchloc_pred_ensemble <- readRDS(file="./predation_data/uncaged_predation_models/final_i_orchloc_pred_ensemble.rds")
+```
+
+```{r}
+e.pred.u.mean <- apply(e_orchloc_pred_ensemble$link, 2, mean)
+e.pred.u.median <- apply(e_orchloc_pred_ensemble$link, 2, median)
+e.pred.u.sd <- apply(e_orchloc_pred_ensemble$link, 2, sd)
+e.pred.u.PI <- apply(e_orchloc_pred_ensemble$link, 2, PI, prob = 0.95)
+
+i.pred.u.mean <- apply(i_orchloc_pred_ensemble$link, 2, mean)
+i.pred.u.median <- apply(i_orchloc_pred_ensemble$link, 2, median)
+i.pred.u.sd <- apply(i_orchloc_pred_ensemble$link, 2, sd)
+i.pred.u.PI <- apply(i_orchloc_pred_ensemble$link, 2, PI, prob = 0.95)
+```
+
+ggplot2 dataframes
+```{r}
+# prediction data
+loc<-rep(c(0,1), each=100)
+mean<-append(e.pred.u.mean,i.pred.u.mean)
+median<-append(e.pred.u.median,i.pred.u.median)
+sd<-append(e.pred.u.sd,i.pred.u.sd)
+lo<-append(e.pred.u.PI[1,],i.pred.u.PI[1,])
+hi<-append(e.pred.u.PI[2,],i.pred.u.PI[2,])
+
+pred.loc<-data.frame(loc, mean, median,sd,lo, hi)
+pred.loc$loc<-as.factor(pred.loc$loc)
+```
+
+```{r,  warning=FALSE, fig.width=7, fig.height=7, fig.align='center'}
+Fig.orchloc <- 
+  ggplot(pred.loc, aes(x=loc, y=mean, type="n")) +
+  geom_crossbar(data=pred.loc, aes(ymin = mean-sd, ymax = mean+sd), fill=skhpal[11], width = 0.15, alpha = 0.50) +
+  geom_errorbar(data=pred.loc, position=position_dodge(0.25), width=.1,  aes(ymin=lo, ymax=hi)) +
+  scale_x_discrete(labels=c("0" = "Edge", "1" = "Interior")) +
+  xlab(NULL) +
+  ylim(0.00,1)+
+  theme_classic() +
+  theme(legend.key=element_blank()) +
+  theme(axis.ticks.length = unit(1,"mm"),
+        axis.ticks.y = element_line(colour="black"),
+        axis.ticks.x = element_line(colour="black"),
+        axis.text.y = element_text(size=18, colour="black"), 
+        axis.title.y = element_text(size=20, margin = margin(t = 0, r = 7, b = 0, l = 0)),
+        axis.text.x = element_text(size=18, colour="black"),
+        axis.title.x = element_blank(),
+        plot.margin = unit(c(0.1,0.1,0.1,0.1),"cm"), 
+        plot.tag.position = c(0.20, 0.98),
+        plot.tag = element_text(size=20)) + 
+  labs(x = " ", y="Predation probability", tag = "B")
+Fig.orchloc
+```
+
+Combine treepc1 and orchard loc uncaged plots
+```{r,fig.width=6, fig.height=12, warning=FALSE}
+Uncage_predation_combined_FIG<-
+  plot_grid(Fig.treepc1,NULL, Fig.orchloc, 
+            align='v', ncol = 1,
+            rel_widths = c(1, 1, 1),
+            rel_heights = c(1, 0.20, 0.9))
+Uncage_predation_combined_FIG
+```
+
+Export
+
+```{r}
+cairo_pdf(file = "Figure5.pdf", width = 6, height = 9) #embeds fonts
+Uncage_predation_combined_FIG
+grid.text("Shorter trees,", x = unit(4.2, "cm"), y = unit(13.1, "cm" ),gp=gpar(fontsize=20))
+grid.text("smaller DBH,", x = unit(4.2, "cm"), y = unit(12.35, "cm" ),gp=gpar(fontsize=20))
+grid.text("shallower fissures", x = unit(3.5, "cm"), y = unit(11.6, "cm" ),gp=gpar(fontsize=20))
+grid.text("Taller trees,", x = unit(13, "cm"), y = unit(13.1, "cm"),gp=gpar(fontsize=20))
+grid.text("larger DBH,", x = unit(13, "cm"), y = unit(12.35, "cm"),gp=gpar(fontsize=20))
+grid.text("deeper fissures", x = unit(12.3, "cm"), y = unit(11.6, "cm"),gp=gpar(fontsize=20))
+dev.off()
+```
+
+```{r, eval=FALSE, warning=FALSE}
+tiff("Figure5.tiff", width = 6, height = 9, units = 'in',res=600)
+Uncage_predation_combined_FIG
+grid.text("Shorter trees,", x = unit(4.2, "cm"), y = unit(13.1, "cm" ),gp=gpar(fontsize=20))
+grid.text("smaller DBH,", x = unit(4.2, "cm"), y = unit(12.35, "cm" ),gp=gpar(fontsize=20))
+grid.text("shallower fissures", x = unit(3.5, "cm"), y = unit(11.6, "cm" ),gp=gpar(fontsize=20))
+grid.text("Taller trees,", x = unit(13, "cm"), y = unit(13.1, "cm"),gp=gpar(fontsize=20))
+grid.text("larger DBH,", x = unit(13, "cm"), y = unit(12.35, "cm"),gp=gpar(fontsize=20))
+grid.text("deeper fissures", x = unit(12.3, "cm"), y = unit(11.6, "cm"),gp=gpar(fontsize=20))
+dev.off()
+```
+
+**Figure 6: Interior Woodpecker x Seminatural cover interaction predictions**
+
+Bring in uncentered data to specify prediction ranges
+```{r}
+un.d<- d %>%
+  filter(cage == 0) %>% #uncaged sentinel larvae only
+  dplyr::select(orchard, distanceD, treeU, larvaeU,
+                I_wood_maxAb,
+                r0500_nat_seminat) 
+
+ustan <- ustan %>% arrange(treeid)
+un.d <- un.d %>% arrange(treeU)
+
+ustan$seminat <- un.d$r0500_nat_seminat
+plot(ustan$seminat, ustan$seminat_c) #check
+ustan$woodpeckerMA <- un.d$I_wood_maxAb #check
+plot(ustan$woodpeckerMA, ustan$woodpeckerMA_c)
+head(ustan)
+```
+
+Binning seminat to plot the Intermediate landscape complexity hypothesis
+```{r, eval=FALSE}
+range(ustan$seminat_c[ustan$seminat < 1]) # "cleared" (-7.948576, -7.091576), n = 250
+range(ustan$seminat_c[ustan$seminat > 1 & ustan$seminat < 20]) # (-6.816576,  4.416424), n = 599
+range(ustan$seminat_c[ustan$seminat > 20]) # "complex" (14.33842, 30.05142), n = 149
+
+range(ustan$woodpeckerMA_c[ustan$seminat < 1]) # "cleared" (-3.493988  0.506012), n = 250
+range(ustan$woodpeckerMA_c[ustan$seminat > 1 & ustan$seminat < 20]) # (-3.493988  5.506012), n = 599
+range(ustan$woodpeckerMA_c[ustan$seminat > 20]) # "complex" (0.506012 6.506012), n = 149
+
+range(ustan$woodpeckerMA[ustan$seminat < 1]) # "cleared" 0-4, n = 250
+range(ustan$woodpeckerMA[ustan$seminat > 1 & ustan$seminat < 20]) # simple; 0-9, n = 599
+range(ustan$woodpeckerMA[ustan$seminat > 20]) # "complex"; 4-10; n = 149
+```
+
+```{r, eval=FALSE}
+range(ustan$woodpeckerMA_c) # -3.493988,  6.506012
+range(ustan$seminat_c) #-7.948576 30.051424
+woodpecker.seq<-seq(-3.493988, 6.506012, length.out=100)
+seminat.seq<-seq(-7.948576, 30.051424, length.out=100)
+
+cleared.woodpecker.seq<-seq(-3.493988,  0.506012, length.out=100)
+simple.woodpecker.seq<-seq(-3.493988,  5.506012, length.out=100)
+complex.woodpecker.seq<-seq(0.506012, 6.506012, length.out=100)
+
+cleared.seminat.seq<-seq(-7.948576, -7.091576, length.out=100)
+simple.seminat.seq<-seq(-6.816576,  4.416424, length.out=100)
+complex.seminat.seq<-seq(14.33842, 30.05142, length.out=100)
+```
+
+Plot the ensemble predictions 
+```{r, eval=FALSE}
+cleared_woodpecker_pred.u <-list( 
+  loc = rep(1,100),     #interior
+  cmnum_c = rep(mean(ustan$cmnum_c),100),
+  treepc1 = rep(mean(ustan$treepc1),100), 
+  seminat_c = rep(mean(cleared.seminat.seq),100), #take the mean of the seminat cover for seminat  < 1%
+  woodpeckerMA_c = cleared.woodpecker.seq, #sequence for max num woodpeckers observed in orchards in seminat landscapes < 1%
+  orch = rep(2,100) # placeholder
+)
+
+simple_woodpecker_pred.u <-list( 
+  loc = rep(1,100),     #interior
+  cmnum_c = rep(mean(ustan$cmnum_c),100),
+  treepc1 = rep(mean(ustan$treepc1),100), 
+  seminat_c = rep(mean(simple.seminat.seq),100), #take the mean of the seminat cover for seminat  1-20%
+  woodpeckerMA_c = simple.woodpecker.seq, #sequence for max num woodpeckers observed in orchards in seminat landscapes 1-20%
+  orch = rep(2,100) # placeholder
+)
+
+complex_woodpecker_pred.u <-list( 
+  loc = rep(1,100),     #interior
+  cmnum_c = rep(mean(ustan$cmnum_c),100),
+  treepc1 = rep(mean(ustan$treepc1),100), 
+  seminat_c = rep(mean(complex.seminat.seq),100), #take the mean of the seminat cover for seminat  > 20%
+  woodpeckerMA_c = complex.woodpecker.seq, #sequence for max num woodpeckers observed in orchards in seminat landscapes >20%
+  orch = rep(2,100) # placeholder
+)
+```
+
+Predictions for an "average" orchard
+```{r, eval=FALSE}
+a_orch_zeros<-matrix(0,2000,20)
+
+final.cleared.pred_ensemble<- ensemble(f10c8, f5i,f10c7, f5h, f5g, f5f, f4tpc2, f10c9b, f4d,
+                      n=2000, data = cleared_woodpecker_pred.u, replace=list(a_orch = a_orch_zeros))
+final.simple.pred_ensemble<- ensemble(f10c8, f5i,f10c7, f5h, f5g, f5f, f4tpc2, f10c9b, f4d,
+                      n=2000, data = simple_woodpecker_pred.u, replace=list(a_orch = a_orch_zeros))
+final.complex.pred_ensemble<- ensemble(f10c8, f5i,f10c7, f5h, f5g, f5f, f4tpc2, f10c9b, f4d,
+                      n=2000, data = complex_woodpecker_pred.u, replace=list(a_orch = a_orch_zeros))
+
+#saveRDS(final.cleared.pred_ensemble, "final.cleared.pred_ensemble.rds")
+#saveRDS(final.simple.pred_ensemble, "final.simple.pred_ensemble.rds")
+#saveRDS(final.complex.pred_ensemble, "final.complex.pred_ensemble.rds")
+```
+
+```{r, eval=FALSE}
+cleared.pred_ensemble <-readRDS("./predation_data/uncaged_predation_models/final.cleared.pred_ensemble.rds")
+simple.pred_ensemble <-readRDS("./predation_data/uncaged_predation_models/final.simple.pred_ensemble.rds")
+complex.pred_ensemble <-readRDS("./predation_data/uncaged_predation_models/final.complex.pred_ensemble.rds")
+```
+
+```{r, eval=FALSE}
+cleared.pred.mean <- apply(cleared.pred_ensemble$link, 2, mean)
+cleared.pred.PI <- apply(cleared.pred_ensemble$link, 2, PI, prob = 0.95)
+
+simple.pred.mean <- apply(simple.pred_ensemble$link, 2, mean)
+simple.pred.PI <- apply(simple.pred_ensemble$link, 2, PI, prob = 0.95)
+
+complex.pred.mean <- apply(complex.pred_ensemble$link, 2, mean)
+complex.pred.PI <- apply(complex.pred_ensemble$link, 2, PI, prob = 0.95)
+```
+
+ggplot2 dataframe
+```{r, eval=FALSE}
+#Centered sequences in each seminat category
+cleared.woodpecker.seq<-seq(-3.493988,  0.506012, length.out=100)
+simple.woodpecker.seq<-seq(-3.493988,  5.506012, length.out=100)
+complex.woodpecker.seq<-seq(0.506012, 6.506012, length.out=100)
+
+# prediction data
+mean<-cleared.pred.mean
+lo<-cleared.pred.PI[1,]
+hi<-cleared.pred.PI[2,]
+cleared.pred<-data.frame(cleared.woodpecker.seq, mean, lo, hi)
+
+mean<-simple.pred.mean
+lo<-simple.pred.PI[1,]
+hi<-simple.pred.PI[2,]
+simple.pred<-data.frame(simple.woodpecker.seq, mean, lo, hi)
+
+mean<-complex.pred.mean
+lo<-complex.pred.PI[1,]
+hi<-complex.pred.PI[2,]
+complex.pred<-data.frame(complex.woodpecker.seq, mean, lo, hi)
+```
+
+Similarly aggregate empericial data per orchard and location
+```{r}
+orchard.loc.seminat<- ustan %>%
+  select(orch, loc, seminat_c, seminat, woodpeckerMA_c, woodpeckerMA, pred) %>%
+  group_by(orch, loc) %>%
+  summarise(orch.loc.seminat_c = mean(seminat_c),
+            orch.loc.seminat = mean(seminat),
+            orch.woodpecker_c = mean(woodpeckerMA_c),
+            orch.woodpecker = mean(woodpeckerMA),
+            orch.loc.pred = mean(pred)) %>%
+  mutate(seminat.cat = ifelse(orch.loc.seminat < 1, "Cleared", "Simple"),
+         seminat.cat = ifelse(orch.loc.seminat > 20, "Complex", seminat.cat)) 
+orchard.loc.seminat  
+
+clear.emp <- orchard.loc.seminat %>% filter(seminat.cat =="Cleared")
+simple.emp <- orchard.loc.seminat %>% filter(seminat.cat =="Simple")
+complex.emp <- orchard.loc.seminat %>% filter(seminat.cat =="Complex")
+```
+
+cleared plot
+```{r, fig.width=7, fig.height=7, warning=FALSE}
+clearedFIG2 <-
+  ggplot(cleared.pred, aes(x=cleared.woodpecker.seq, y=mean, type="n")) +
+  geom_point(data = clear.emp, aes(x = orch.woodpecker_c,y=orch.loc.pred), col=skhpal[2], pch = 1, cex = 4) +
+  geom_line(data=cleared.pred, aes(x = cleared.woodpecker.seq,y=mean), col=skhpal[10], size = 1.5) +
+  geom_line(data=cleared.pred, aes(x = cleared.woodpecker.seq,y=lo), col=skhpal[10], size = 1,linetype ="dashed") +
+  geom_line(data=cleared.pred, aes(x = cleared.woodpecker.seq,y=hi), col=skhpal[10], size = 1,linetype ="dashed") +
+  theme_classic() +
+  theme(legend.key=element_blank()) +
+  theme(axis.text=element_text(size=18, colour="black"),
+        axis.title.y=element_text(size=20, colour ="black", margin = margin(t = 0, r = 5, b = 0, l = 0, "mm")),
+        axis.title.x=element_blank()) +
+        scale_x_continuous(breaks=c(-3.49,-1.49,0.506, 2.503, 4.506,  6.506),
+                     labels=c("0",  "2",  "4",   "6",   "8",    "10")) +
+  theme(plot.title = element_text(hjust = 0.5, size = 22)) +
+  theme(plot.margin = margin(t=0.2, r=0, b=1.5, l=0.2, "cm"))+
+  ylab("Predation probability") +
+  ggtitle("Cleared") +
+  theme(plot.title = element_text(size = 20))
+clearedFIG2   
+```
+
+simple plot
+```{r, fig.width=7, fig.height=7}
+simpleFIG2 <-
+  ggplot(simple.pred, aes(x=simple.woodpecker.seq, y=mean, type="n")) +
+  geom_point(data = simple.emp, aes(x = orch.woodpecker_c,y=orch.loc.pred), col=skhpal[2], pch = 1, cex = 4) +
+  geom_line(data=simple.pred, aes(x = simple.woodpecker.seq,y=mean), col=skhpal[10], size = 1.5) +
+  geom_line(data=simple.pred, aes(x = simple.woodpecker.seq,y=lo), col=skhpal[10], size = 1,linetype ="dashed") +
+  geom_line(data=simple.pred, aes(x = simple.woodpecker.seq,y=hi), col=skhpal[10], size = 1,linetype ="dashed") +
+  theme_classic() +
+  theme(legend.key=element_blank()) +
+  theme(axis.text=element_text(size=18, colour="black"),
+        axis.title=element_blank()) +
+  scale_x_continuous(breaks=c(-3.49,-1.49,0.506, 2.503, 4.506,  6.506),
+                     labels=c("0",  "2",  "4",   "6",   "8",    "10")) +
+  theme(plot.title = element_text(hjust = 0.5, size =22)) +
+  theme(plot.margin = margin(t=0.2, r=0, b=1.5, l=0.2, "cm"))+
+  ggtitle("Simple")+
+  theme(plot.title = element_text(size = 20))
+simpleFIG2
+```
+
+complex plot
+```{r, fig.width=7, fig.height=7}
+complexFIG2 <-
+  ggplot(complex.pred, aes(x=complex.woodpecker.seq, y=mean, type="n")) +
+  geom_point(data = complex.emp, aes(x = orch.woodpecker_c,y=orch.loc.pred), col=skhpal[2], pch = 1, cex = 4) +
+  geom_line(data=complex.pred, aes(x = complex.woodpecker.seq,y=mean), col=skhpal[10], size = 1.5) +
+  geom_line(data=complex.pred, aes(x = complex.woodpecker.seq,y=lo), col=skhpal[10], size = 1,linetype ="dashed") +
+  geom_line(data=complex.pred, aes(x = complex.woodpecker.seq,y=hi), col=skhpal[10], size = 1,linetype ="dashed") +
+  theme_classic() +
+  theme(legend.key=element_blank()) +
+  theme(axis.text=element_text(size=18, colour="black"),
+        axis.title=element_blank()) + 
+  scale_x_continuous(breaks=c(-3.49,-1.49,0.506, 2.503, 4.506,  6.506),
+                     labels=c("0",  "2",  "4",   "6",   "8",    "10")) +
+  theme(plot.title = element_text(hjust = 0.5, size = 22)) +
+  theme(plot.margin = margin(t=0.2, r=0, b=1.5, l=0.2, "cm"))+
+  ggtitle("Complex") +
+  theme(plot.title = element_text(size = 20))
+complexFIG2
+```
+
+Combine three plots and print
+```{r FIG.woodpecker tri, warning=FALSE, echo=FALSE, fig.width=14, fig.height=5, fig.align='center'}
+FIG.woodpecker.triptych<-plot_grid(clearedFIG2,simpleFIG2, complexFIG2, 
+                                   align='h', axis='b', 
+                                   ncol = 3, rel_widths = c(0.56, 1 ,0.7))
+FIG.woodpecker.triptych
+```
+
+Export Figure 6
+```{r export FIG.woodpecker triptych3, eval=FALSE, warning=FALSE}
+tiff("Figure6.tiff", width = 14, height = 5, units = 'in',res=1000)
+FIG.woodpecker.triptych
+grid.text("Woodpecker maximum abundance (orchard interiors)", y = unit(0.75, "cm" ), gp=gpar(fontsize=20))
+dev.off()
+
+cairo_pdf(file = "Figure6.pdf", width=14, height=5) #embeds fonts
+FIG.woodpecker.triptych
+grid.text("Woodpecker maximum abundance (orchard interiors)", y = unit(0.75, "cm" ), gp=gpar(fontsize=20))
+dev.off()
+```
+
+**Appendix S2: Figure S3**
+
+```{r}
+WAIC <- read.csv("./predation_data/uncaged_predation_models/apps2fig3waictab.csv")
+WAIC$order<-as.factor(WAIC$order)
+levels(WAIC$measure)
+levels(WAIC$measure) <- c("WAIC", "dWAIC", "Weight (%)")
+
+```
+
+```{r, fig.height = 4, fig.width=10}
+WAICAppBplot<-
+ggplot(WAIC, aes(colour = Combo)) +
+geom_linerange(aes(x = order, ymin = value-se, ymax = value+se),
+                            lwd = 0.75, position = position_dodge(width = 0.75)) +
+geom_pointrange(aes(x = order, y = value, ymin = value-se, ymax = value+se),
+                             lwd = 0.5, position = position_dodge(width = 0.75), shape=16) +
+scale_color_manual(values=c("Lpred"="blue","Lpredtpc"="#003399","LpredLoc"="#3399FF","LpredSemi"="#33FFFF",
+                            "Pecker"="green","Peckertpc"="#006633","PeckerLoc"="#66C600","PeckerSemi"="#99FF00"),
+                   guide=FALSE) +
+scale_x_discrete(labels=c("12" = "TreePC1 + IWoodpeckerMA x SeminaturalCover", 
+                          "11" = "TreePC1 + ILikelyPredatorMA x SeminaturalCover", 
+                          "10" = "TreePC1 + IWoodpeckerMA + SeminaturalCover", 
+                          "9" = "TreePC1 + ILikelyPredatorMA + SeminaturalCover", 
+                          "8" = "TreePC1 + ILikelyPredatorMA x MarginType", 
+                          "7"  = "TreePC1 + ILikelyPredatorMA", 
+                          "6" = "TreePC1 + IWoodpeckerMA x MarginType",
+                          "5" = "TreePC1 + IWoodpeckerMA + MarginType",
+                          "4"  = "TreePC1 + IWoodpeckerMA", 
+                          "3" = "TreePC1 + ILikelyPredatorMA + MarginType",
+                          "2"  = "IWoodpeckerMA",
+                          "1"  = "ILikelyPredatorMA")) +
+theme_bw() +
+facet_grid(.~measure, scales="free_x", space="free") +
+  theme(strip.text.x = element_text(size=14, angle=0)) +
+theme(legend.key=element_blank()) +
+theme(axis.ticks.length = unit(1,"mm"),
+      axis.text.y = element_text(size=9, colour="black"),
+      axis.title.y = element_blank(),
+      axis.text.x = element_text(size=12, colour="black"),
+      axis.title.x = element_text(size=16, colour="black")) +
+  labs(y="WAIC estimates +/- standard error") + 
+  coord_flip() +
+  theme(plot.margin = unit(c(0.1,0.1,0.5,0.15),"cm")) 
+
+WAICAppBplot
+```
+
+Coef Figure
+```{r}
+dcoef<-read.csv("./predation_data/uncaged_predation_models/apps2figs3coeftab.csv")
+dcoef$order<-as.factor(dcoef$order)
+levels(dcoef$facettype)
+levels(dcoef$facettype) <- c("Avian Predator Group", "Local/Landscape","Interaction" )
+```
+
+```{r, fig.height = 4, fig.width=10}
+CoefAppBplot<-
+  ggplot(dcoef, aes(colour = combo)) +
+geom_hline(yintercept = 0, colour = "gray25", lty = "dashed") +
+geom_linerange(aes(x = order, ymin = lo, ymax = hi),
+                            lwd = 0.75, position = position_dodge(width = 0.75)) +
+geom_pointrange(aes(x = order, y = Mean, ymin = lo, ymax = hi),
+                             lwd = 0.5, position = position_dodge(width = 0.75), shape=16) +
+scale_color_manual(values=c("Lpred"="blue","Lpredtpc"="#003399","LpredLoc"="#3399FF","LpredSemi"="#33FFFF",
+                            "Pecker"="green","Peckertpc"="#006633","PeckerLoc"="#66C600","PeckerSemi"="#99FF00"),
+                   guide=FALSE) +
+scale_x_discrete(labels=c("12" = "TreePC1 + IWoodpeckerMA x SeminaturalCover", 
+                          "11" = "TreePC1 + ILikelyPredatorMA x SeminaturalCover", 
+                          "10" = "TreePC1 + IWoodpeckerMA + SeminaturalCover", 
+                          "9" = "TreePC1 + ILikelyPredatorMA + SeminaturalCover", 
+                          "8" = "TreePC1 + ILikelyPredatorMA x MarginType", 
+                          "7"  = "TreePC1 + ILikelyPredatorMA", 
+                          "6" = "TreePC1 + IWoodpeckerMA x MarginType",
+                          "5" = "TreePC1 + IWoodpeckerMA + MarginType",
+                          "4"  = "TreePC1 + IWoodpeckerMA", 
+                          "3" = "TreePC1 + ILikelyPredatorMA + MarginType",
+                          "2"  = "IWoodpeckerMA",
+                          "1"  = "ILikelyPredatorMA")) +
+theme_bw() +
+  facet_grid(.~facettype) +
+  theme(strip.text.x = element_text(size=14, angle=0)) +
+theme(legend.key=element_blank()) +
+theme(axis.ticks.length = unit(1,"mm"),
+      axis.text.y = element_text(size=9, colour="black"),
+      axis.title.y = element_blank(),
+      axis.text.x = element_text(size=12, colour="black"),
+      axis.title.x = element_text(size=16, colour="black")) +
+  labs(y="Posterior densities mean, 95% CI") +
+  coord_flip() +
+  theme(plot.margin = unit(c(0.5,0.1,0.1,0.15),"cm"))  
+
+CoefAppBplot
+```
+
+Combine 
+```{r,fig.height = 8, fig.width=10, warning=FALSE}
+WAIC_Coeff_FunctionalGroup_Cover_AppendixB_Fig<-
+  plot_grid(WAICAppBplot,CoefAppBplot, 
+            ncol=1,
+            rel_widths = c(1, 1), 
+            labels=c('A', 'B'), label_size = 22, label_fontface ="plain")
+
+WAIC_Coeff_FunctionalGroup_Cover_AppendixB_Fig
+
+#saveRDS(Uncage_predation_combined_FIG, "Uncage_predation_combined_FIG.rds") 
+```
+
+Export
+```{r, eval=FALSE, warning=FALSE}
+tiff("WAIC_Coeff_FunctionalGroup_Cover_AppendixB_Fig.tiff", width = 10, height = 8, units = 'in',res=1000)
+AppS2Fig3
+dev.off()
+
+cairo_pdf(file = "WAIC_Coeff_FunctionalGroup_Cover_AppendixB_Fig.pdf", width=10, height=8) #embeds fonts
+AppS2Fig3
+dev.off()
+```
