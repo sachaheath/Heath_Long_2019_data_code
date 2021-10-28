@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 spec,taxorder,Common name,Scientific name
 CANV,74,Canvasback,Aythya valisineria
 COGO,93,Common Goldeneye,Bucephala clangula
@@ -64,3 +65,71 @@ WEME,1972,Western Meadowlark,Sturnella neglecta
 RWBL,2010,Red-winged Blackbird,Agelaius phoeniceus
 BRBL,2022,Brewer's Blackbird,Euphagus cyanocephalus
 YRWA,2091,Yellow-rumped Warbler,Setophaga coronata
+=======
+spec,taxorder,Common name,Scientific name
+CANV,74,Canvasback,Aythya valisineria
+COGO,93,Common Goldeneye,Bucephala clangula
+CAQU,125,California Quail,Callipepla californica
+RNEP,144,Ring-necked Pheasant,Phasianus colchicus
+WITU,158,Wild Turkey,Meleagris gallopavo
+EUCD,186,Eurasian Collared-Dove,Streptopelia decaocto
+MODO,219,Mourning Dove,Zenaida macroura
+ANHU,357,Anna's Hummingbird,Calypte anna
+KILL,489,Killdeer,Charadrius vociferus
+GBHE,765,Great Blue Heron,Ardea herodias
+GREG,770,Great Egret,Ardea alba
+TUVU,798,Turkey Vulture,Cathartes aura
+NOHA,818,Northern Harrier,Circus hudsonius
+COHA,825,Cooper's Hawk,Accipiter cooperii
+RSHA,845,Red-shouldered Hawk,Buteo lineatus
+RTHA,852,Red-tailed Hawk,Buteo jamaicensis
+GHOW,880,Great Horned Owl,Bubo virginianus
+BEKI,944,Belted Kingfisher,Megaceryle alcyon
+ACWO,976,Acorn Woodpecker,Melanerpes formicivorus
+RBSA,994,Red-breasted Sapsucker,Sphyrapicus ruber
+NUWO,999,Nuttall's Woodpecker,Picoides nuttallii
+NOFL,1016,Northern Flicker,Colaptes auratus
+AMKE,1041,American Kestrel,Falco sparverius
+MERL,1043,Merlin,Falco columbarius
+BLPH,1284,Black Phoebe,Sayornis nigricans
+SAPH,1286,Say's Phoebe,Sayornis saya
+CASJ,1288,California Scrub-jay,Aphelocoma californica
+LOSH,1373,Loggerhead Shrike,Lanius ludovicianus
+YBMA,1442,Yellow-billed Magpie,Pica nuttalli
+AMCR,1445,American Crow,Corvus brachyrhynchos
+CORA,1458,Common Raven,Corvus corax
+OATI,1497,Oak Titmouse,Baeolophus inornatus
+BUSH,1502,Bushtit,Psaltriparus minimus
+WBNU,1504,White-breasted Nuthatch,Sitta carolinensis
+PAWR,1521,Pacific Wren,Troglodytes pacificus
+MAWR,1525,Marsh Wren,Cistothorus palustris
+BEWR,1527,Bewick's Wren,Thryomanes bewickii
+BGGN,1562,Blue-gray Gnatcatcher,Polioptila caerulea
+RCKI,1574,Ruby-crowned Kinglet,Regulus calendula
+WEBL,1614,Western Bluebird,Sialia mexicana
+HETH,1642,Hermit Thrush,Catharus guttatus
+AMRO,1662,American Robin,Turdus migratorius
+NOMO,1693,Northern Mockingbird,Mimus polyglottos
+EUST,1694,European Starling,Sturnus vulgaris
+CEDW,1698,Cedar Waxwing,Bombycilla cedrorum
+PHAI,1707,Phainopepla,Phainopepla nitens
+HOSP,1728,House Sparrow,Passer domesticus
+HOFI,1809,House Finch,Haemorhous mexicanus
+PUFI,1810,Purple Finch,Haemorhous purpureus
+LEGO,1831,Lesser Goldfinch,Spinus psaltria
+AMGO,1833,American Goldfinch,Spinus tristis
+SPTO,1867,Spotted Towhee,Pipilo maculatus
+CALT,1879,California Towhee,Melozone crissalis
+LASP,1899,Lark Sparrow,Chondestes grammacus
+SAVS,1906,Savannah Sparrow,Passerculus sandwichensis
+FOSP,1922,Fox Sparrow,Passerella iliaca
+SOSP,1923,Song Sparrow,Melospiza melodia
+LISP,1924,Lincoln's Sparrow,Melospiza lincolnii
+WCSP,1929,White-crowned Sparrow,Zonotrichia leucophrys
+GCSP,1936,Golden-crowned Sparrow,Zonotrichia atricapilla
+DEJU,1938,Dark-eyed Junco,Junco hyemalis
+WEME,1972,Western Meadowlark,Sturnella neglecta
+RWBL,2010,Red-winged Blackbird,Agelaius phoeniceus
+BRBL,2022,Brewer's Blackbird,Euphagus cyanocephalus
+YRWA,2091,Yellow-rumped Warbler,Setophaga coronata
+>>>>>>> 1c5673e73a321d2569c476a141c5e16ec7066860

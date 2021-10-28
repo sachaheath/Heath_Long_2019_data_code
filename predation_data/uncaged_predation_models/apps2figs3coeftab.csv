@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 modelname,sort,order,Model,combo,facettype,variable,Mean,lo,hi
 f10c8,1,12,TreePC1 + IWoodpeckerMA x SeminaturalCover,PeckerSemi,habitat,bseminat,0.012,-0.124,0.15
 f10c8,2,12,TreePC1 + IWoodpeckerMA x SeminaturalCover,PeckerSemi,avian,bwoodMA,0.895,0.341,1.526
@@ -23,3 +24,30 @@ f6a2a,21,3,TreePC1 + MarginType + ILikelyPredatorMA,LpredLoc,habitat,bhab,-0.139
 f6a2a,22,3,TreePC1 + MarginType + ILikelyPredatorMA,LpredLoc,avian,bpredMA,0.427,0.07,0.796
 f3,23,2,IWoodpeckerMA,Pecker,avian,bwoodMA,0.606,0.246,0.997
 f2,24,1,ILikelyPredatorMA,Lpred,avian,bpredMA,0.494,0.147,0.834
+=======
+modelname,sort,order,Model,combo,facettype,variable,Mean,lo,hi
+f10c8,1,12,TreePC1 + IWoodpeckerMA x SeminaturalCover,PeckerSemi,habitat,bseminat,0.012,-0.124,0.15
+f10c8,2,12,TreePC1 + IWoodpeckerMA x SeminaturalCover,PeckerSemi,avian,bwoodMA,0.895,0.341,1.526
+f10c8,3,12,TreePC1 + IWoodpeckerMA x SeminaturalCover,PeckerSemi,interaction,bseminatxwoodMA,-0.05,-0.092,-0.01
+f10c6,4,11,TreePC1 + ILikelyPredatorMA x SeminaturalCover,LpredSemi,habitat,bseminat,-0.022,-0.164,0.122
+f10c6,5,11,TreePC1 + ILikelyPredatorMA x SeminaturalCover,LpredSemi,avian,bpredMA,0.763,0.245,1.356
+f10c6,6,11,TreePC1 + ILikelyPredatorMA x SeminaturalCover,LpredSemi,interaction,bseminatxpredMA,-0.035,-0.077,0.002
+f10c7,7,10,TreePC1 + IWoodpeckerMA + SeminaturalCover,PeckerSemi,habitat,bseminat,-0.103,-0.228,0.013
+f10c7,8,10,TreePC1 + IWoodpeckerMA + SeminaturalCover,PeckerSemi,avian,bwoodMA,0.782,0.257,1.363
+f10c5,9,9,TreePC1 + ILikelyPredatorMA + SeminaturalCover,LpredSemi,habitat,bseminat,-0.099,-0.232,0.02
+f10c5,10,9,TreePC1 + ILikelyPredatorMA + SeminaturalCover,LpredSemi,avian,bpredMA,0.636,0.147,1.151
+f6a2,11,8,TreePC1 + MarginType x ILikelyPredatorMA,LpredLoc,habitat,bhab,-0.115,-1.541,1.331
+f6a2,12,8,TreePC1 + MarginType x ILikelyPredatorMA,LpredLoc,avian,bpredMA,0.434,-0.256,1.121
+f6a2,13,8,TreePC1 + MarginType x ILikelyPredatorMA,LpredLoc,interaction,bhabxpredMA,-0.012,-0.81,0.755
+f4a,14,7,TreePC1 + ILikelyPredatorMA,Lpredtpc,avian,bpredMA,0.418,0.076,0.759
+f6a4,15,6,TreePC1 + MarginType x IWoodpeckerMA,PeckerLoc,habitat,bhab,-0.401,-1.776,1.1
+f6a4,16,6,TreePC1 + MarginType x IWoodpeckerMA,PeckerLoc,avian,bwoodMA,0.696,-0.047,1.463
+f6a4,17,6,TreePC1 + MarginType x IWoodpeckerMA,PeckerLoc,interaction,bhabxwoodMA,-0.2,-1.033,0.659
+f6a4a,18,5,TreePC1 + MarginType + IWoodpeckerMA,PeckerLoc,habitat,bhab,-0.327,-1.679,1.1
+f6a4a,19,5,TreePC1 + MarginType + IWoodpeckerMA,PeckerLoc,avian,bwoodMA,0.542,0.147,0.939
+f4c,20,4,TreePC1 + IWoodpeckerMA ,Peckertpc,avian,bwoodMA,0.519,0.169,0.933
+f6a2a,21,3,TreePC1 + MarginType + ILikelyPredatorMA,LpredLoc,habitat,bhab,-0.139,-1.484,1.252
+f6a2a,22,3,TreePC1 + MarginType + ILikelyPredatorMA,LpredLoc,avian,bpredMA,0.427,0.07,0.796
+f3,23,2,IWoodpeckerMA,Pecker,avian,bwoodMA,0.606,0.246,0.997
+f2,24,1,ILikelyPredatorMA,Lpred,avian,bpredMA,0.494,0.147,0.834
+>>>>>>> 1c5673e73a321d2569c476a141c5e16ec7066860

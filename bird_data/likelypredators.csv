@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ID,spec,taxa,common,sciname,BK_plant,BK_seed,BK_fruit,BK_nectar,BK_invert,BK_carrion,BK_vert,BKdietsum,BK_NBdietguild,DG_NBsubstrate,DG_NBattack,barktrunk1,bartktunknote1,como1,como_note1,comopred1
 19,ACWO,963,Acorn Woodpecker,Melanerpes formicivorus,0.5,4,0.5,0.5,4,0,0.5,10,omnivore,upper-canopy/bark,glean,1,Ehrlich; BNAO,0,,1
 20,RBSA,981,Red-breasted Sapsucker,Sphyrapicus ruber,1,0,1,0,8,0,0,10,insectivore,bark,glean/excavate,1,DeGraff,0,,1
@@ -10,3 +11,17 @@ ID,spec,taxa,common,sciname,BK_plant,BK_seed,BK_fruit,BK_nectar,BK_invert,BK_car
 35,PAWR,1504,Pacific Wren,Troglodytes pacificus,0,0,0,0,10,0,0,10,insectivore,ground,glean,1,Holmes et al. 1979,0,,1
 37,BEWR,1510,Bewick's Wren,Thryomanes bewickii,0,0,0,0,10,0,0,10,insectivore,ground,glean,1,BNAO,0,,1
 41,HETH,1620,Hermit Thrush,Catharus guttatus,0,0,5,0,5,0,0,10,omnivore,ground/lower-canopy,forage,1,Holmes et al. 1979,0,,1
+=======
+ID,spec,taxa,common,sciname,BK_plant,BK_seed,BK_fruit,BK_nectar,BK_invert,BK_carrion,BK_vert,BKdietsum,BK_NBdietguild,DG_NBsubstrate,DG_NBattack,barktrunk1,bartktunknote1,como1,como_note1,comopred1
+19,ACWO,963,Acorn Woodpecker,Melanerpes formicivorus,0.5,4,0.5,0.5,4,0,0.5,10,omnivore,upper-canopy/bark,glean,1,Ehrlich; BNAO,0,,1
+20,RBSA,981,Red-breasted Sapsucker,Sphyrapicus ruber,1,0,1,0,8,0,0,10,insectivore,bark,glean/excavate,1,DeGraff,0,,1
+21,NUWO,986,Nuttall's Woodpecker,Picoides nuttallii,0,0,0,0,10,0,0,10,insectivore,bark/upper-canopy,glean,1,"BNAO, Ehrlich",1,SKH video,1
+22,NOFL,1003,Northern Flicker,Colaptes auratus,0,2,2,0,6,0,0,10,insectivore,ground/lower-canopy,forage,1,"McAtee 1912, Ehrlich bark gleaner",1,McAtee 1912,1
+29,YBMA,1427,Yellow-billed Magpie,Pica nuttalli,0,2,0,0,6,1,1,10,insectivore,ground/lower-canopy,forage,1,McAtee 1912 (Melander and Jenne 1906),1,McAtee 1912 (Melander and Jenne 1906),1
+32,OATI,1480,Oak Titmouse,Baeolophus inornatus,0,5,0,0,5,0,0,10,omnivore,lower-canopy,forage,1,BNAO; Ehrlich,0,,1
+33,BUSH,1485,Bushtit,Psaltriparus minimus,0,0,0,0,10,0,0,10,insectivore,lower-canopy,forage,1,Ehrlich,1,Beal 1907,1
+34,WBNU,1487,White-breasted Nuthatch,Sitta carolinensis,0,4,0,0,6,0,0,10,insectivore,upper-canopy/bark,glean,1,BNAO; Ehrlich; Holmes et al. 1979,1,SKH video,1
+35,PAWR,1504,Pacific Wren,Troglodytes pacificus,0,0,0,0,10,0,0,10,insectivore,ground,glean,1,Holmes et al. 1979,0,,1
+37,BEWR,1510,Bewick's Wren,Thryomanes bewickii,0,0,0,0,10,0,0,10,insectivore,ground,glean,1,BNAO,0,,1
+41,HETH,1620,Hermit Thrush,Catharus guttatus,0,0,5,0,5,0,0,10,omnivore,ground/lower-canopy,forage,1,Holmes et al. 1979,0,,1
+>>>>>>> 1c5673e73a321d2569c476a141c5e16ec7066860

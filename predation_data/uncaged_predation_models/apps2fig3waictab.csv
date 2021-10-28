@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 modelname,order,Model,Combo,ModelType,measure,value,se
 f10c8,12,TreePC1 + IWoodpeckerMA x SeminaturalCover,PeckerSemi,T+PLandI,1waic,784.1,36.5
 f10c8,12,TreePC1 + IWoodpeckerMA x SeminaturalCover,PeckerSemi,T+PLandI,dWAIC,0,0
@@ -35,3 +36,42 @@ f3,2,IWoodpeckerMA,Pecker,1U,WAICweight,0,0
 f2,1,ILikelyPredatorMA,Lpred,1U,1waic,813.4,36.4
 f2,1,ILikelyPredatorMA,Lpred,1U,dWAIC,29.3,8.5
 f2,1,ILikelyPredatorMA,Lpred,1U,WAICweight,0,0
+=======
+modelname,order,Model,Combo,ModelType,measure,value,se
+f10c8,12,TreePC1 + IWoodpeckerMA x SeminaturalCover,PeckerSemi,T+PLandI,1waic,784.1,36.5
+f10c8,12,TreePC1 + IWoodpeckerMA x SeminaturalCover,PeckerSemi,T+PLandI,dWAIC,0,0
+f10c8,12,TreePC1 + IWoodpeckerMA x SeminaturalCover,PeckerSemi,T+PLandI,WAICweight,60,0
+f10c6,11,TreePC1 + ILikelyPredatorMA x SeminaturalCover,LpredSemi,T+PLandI,1waic,785.7,36.6
+f10c6,11,TreePC1 + ILikelyPredatorMA x SeminaturalCover,LpredSemi,T+PLandI,dWAIC,1.6,1
+f10c6,11,TreePC1 + ILikelyPredatorMA x SeminaturalCover,LpredSemi,T+PLandI,WAICweight,30,0
+f10c7,10,TreePC1 + IWoodpeckerMA + SeminaturalCover,PeckerSemi,T+PLandA,1waic,788.2,36.6
+f10c7,10,TreePC1 + IWoodpeckerMA + SeminaturalCover,PeckerSemi,T+PLandA,dWAIC,4.1,2
+f10c7,10,TreePC1 + IWoodpeckerMA + SeminaturalCover,PeckerSemi,T+PLandA,WAICweight,10,0
+f10c5,9,TreePC1 + ILikelyPredatorMA + SeminaturalCover,LpredSemi,T+PLandA,1waic,789.1,36.7
+f10c5,9,TreePC1 + ILikelyPredatorMA + SeminaturalCover,LpredSemi,T+PLandA,dWAIC,5,2.1
+f10c5,9,TreePC1 + ILikelyPredatorMA + SeminaturalCover,LpredSemi,T+PLandA,WAICweight,0,0
+f6a2,8,TreePC1 + MarginType x ILikelyPredatorMA,LpredLoc,T+PLocI,1waic,795.5,36.7
+f6a2,8,TreePC1 + MarginType x ILikelyPredatorMA,LpredLoc,T+PLocI,dWAIC,11.4,3.7
+f6a2,8,TreePC1 + MarginType x ILikelyPredatorMA,LpredLoc,T+PLocI,WAICweight,0,0
+f4a,7,TreePC1 + ILikelyPredatorMA,Lpredtpc,1UT,1waic,795.7,36.6
+f4a,7,TreePC1 + ILikelyPredatorMA,Lpredtpc,1UT,dWAIC,11.6,3.8
+f4a,7,TreePC1 + ILikelyPredatorMA,Lpredtpc,1UT,WAICweight,0,0
+f6a4,6,TreePC1 + MarginType x IWoodpeckerMA,PeckerLoc,T+PLocI,1waic,795.8,36.7
+f6a4,6,TreePC1 + MarginType x IWoodpeckerMA,PeckerLoc,T+PLocI,dWAIC,11.7,3.7
+f6a4,6,TreePC1 + MarginType x IWoodpeckerMA,PeckerLoc,T+PLocI,WAICweight,0,0
+f6a4a,5,TreePC1 + MarginType + IWoodpeckerMA,PeckerLoc,T+PLocA,1waic,796,36.7
+f6a4a,5,TreePC1 + MarginType + IWoodpeckerMA,PeckerLoc,T+PLocA,dWAIC,11.9,3.9
+f6a4a,5,TreePC1 + MarginType + IWoodpeckerMA,PeckerLoc,T+PLocA,WAICweight,0,0
+f4c,4,TreePC1 + IWoodpeckerMA ,Peckertpc,1UT,1waic,796.1,36.7
+f4c,4,TreePC1 + IWoodpeckerMA ,Peckertpc,1UT,dWAIC,12,3.9
+f4c,4,TreePC1 + IWoodpeckerMA ,Peckertpc,1UT,WAICweight,0,0
+f6a2a,3,TreePC1 + MarginType + ILikelyPredatorMA,LpredLoc,T+PLocA,1waic,796.2,36.7
+f6a2a,3,TreePC1 + MarginType + ILikelyPredatorMA,LpredLoc,T+PLocA,dWAIC,12.1,3.7
+f6a2a,3,TreePC1 + MarginType + ILikelyPredatorMA,LpredLoc,T+PLocA,WAICweight,0,0
+f3,2,IWoodpeckerMA,Pecker,1U,1waic,812.8,36.3
+f3,2,IWoodpeckerMA,Pecker,1U,dWAIC,28.7,8.5
+f3,2,IWoodpeckerMA,Pecker,1U,WAICweight,0,0
+f2,1,ILikelyPredatorMA,Lpred,1U,1waic,813.4,36.4
+f2,1,ILikelyPredatorMA,Lpred,1U,dWAIC,29.3,8.5
+f2,1,ILikelyPredatorMA,Lpred,1U,WAICweight,0,0
+>>>>>>> 1c5673e73a321d2569c476a141c5e16ec7066860

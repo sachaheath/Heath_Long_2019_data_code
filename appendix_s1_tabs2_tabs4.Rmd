@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ---
 title: "Heath, S.K. and R.F. Long. 2019. Multiscale habitat mediates pest reduction by birds in an intensive agricultural region. Ecosphere. DOI: 10.1002/ecs2.2884"
 sub-title: "PCA for margin vegetation characteristics and walnut tree characteristics."
@@ -134,3 +135,141 @@ head(sentineltree.pc1scores)
 Now treepc1 can be interpreted as:
 Sentinel trees with higher PC1 scores have taller, girthier trees with deeper fissures.
 
+=======
+---
+title: "Heath, S.K. and R.F. Long. 2019. Multiscale habitat mediates pest reduction by birds in an intensive agricultural region. Ecosphere. DOI: 10.1002/ecs2.2884"
+sub-title: "PCA for margin vegetation characteristics and walnut tree characteristics."
+author: "Sacha K. Heath"
+date: "October 25, 2017; code edited for publication August 2019"
+output: html_notebook
+---
+
+```{r, include=F}
+knitr::opts_chunk$set(comment = NA)
+```
+
+```{r}
+library(zoo)
+library(dplyr)
+library(tidyr)
+library(dplyr)
+library(vegan)
+```
+
+
+**Appendix S2: Table S2 -Vegetation characteristics of orchard margin strip-transects (n = 20)**  
+
+Predictors:    
+m_ht - Mean vegetation height (m; measured at 5 locations)  
+mnvl - mean number of vegetation layers (1-5; measured at 5 locations)    
+mplength and mpwdth - mean patch length and width in which this particular orchard margin is embedded  
+
+Data for margin vegetation (n = 20)  
+```{r}
+mveg<- read.csv("./pca_data/localhab_20.csv")
+
+mveg <- mveg %>%
+  arrange(orch)
+mveg
+```
+
+Create input table for PCA
+```{r}
+mv<- mveg[c("m_ht", "mnvl", "mplength","mpwdth")]
+mv.pca <-rda(mv, scale=TRUE) 
+
+options(max.print=1000)
+summary(mv.pca)
+```
+
+Loadings and scores for margin vegetation characteristics PC1. 
+```{r , eval = FALSE}
+mv.pca$CA$v
+marginveg.loadings <- mv.pca$CA$v[,1]   
+(margveg.pc1scores<- as.numeric(scores(mv.pca, choices = 1, display = "sites")))
+```
+
+Scaled, PC1 accounts for 79% of variability in the data, and PC1 and PC2 together account for 93%. PC1 is loaded nearly uniformly with each of the four original variables, and the loadings all have the same sign (-). PC1 is an overall measure of the height and number of vegetation layers in the transect margin patch and the absolute length and width of the patch in which this orchard margin is embedded. Orchard trees with lower PC1 scores have bigger more structurally diverse patches in on their edges. Low PC2 scores have more layers, longer patches of less height and width. Trees with lower PC3 scores have bigger patches but simpler shorter veg within the 300m orchard margin proper. That's super interesting, but to keep things simple I'm going to focus on PC1 for now. If this ends up being highely predictive, we can investigate more post hoc.
+
+Because I find the correlation with cmnum to be very confusing with the sign of a negative loading (especially when all are uniform like this), and because I like to plot positive scores on the right side of plots that correspond to the higher values of the variables in question I took the negative on the loadings and the scores. 
+
+```{r easier to interpret marginveg loadings and scores for orchard tree characteristics PC1}
+# take (-) of loadings and scores for easier interpretation later
+marginveg.loadings <- (-(mv.pca$CA$v))   
+marginveg.loadings
+```
+
+```{r}
+#write.csv(marginveg.loadings, "MarginVeg_PC_loadings.csv")
+```
+
+Now margvegpc1 can be interpreted as Orchards with higher PC1 scores have bigger more structurally diverse patches in on their edges.  
+
+```{r}
+(margveg.pc1scores<- -(as.numeric(scores(mv.pca, choices = 1, display = "sites"))))
+```
+
+
+**Appendix S2: Table S4 - Characteristics for sentinel predation walnut sampling trees (n=400)**  
+
+```{r}
+stree<-read.csv("./pca_data/sentineltree.csv")
+head(stree)
+table(stree$orchard)
+```
+
+```{r}
+options (warn=-1) 
+dstree<-as.data.frame(stree %>% 
+                    rowwise() %>% 
+                    mutate(mfiss=mean(c(f1,f2,f3,f4), na.rm=T),
+                           maxfiss=max(c(f1,f2,f3,f4), na.rm=T)) %>%                         
+                    group_by(treeid) )
+                   
+dstree$treeid; head(dstree)
+summary(dstree)
+```
+
+Predictors:  
+mfiss - Mean of 4 fissure depths (mm)  per tree
+maxfiss - maximum of 4 fissure depths (mm)  per tree
+ht - walnut tree ht (m)  
+dbh - diameter at breast height (m)  
+
+Create input table for PCA 
+
+```{r}
+names(dstree)
+s <- dstree[c("ht", "dbh","mfiss")] #using mfiss vs. maxfiss or both, has higher cum prop for PC1
+s.pca <-rda(s, scale = TRUE) ##Scale=TRUE scales all vars to similar scale
+
+options(max.print=20)
+(s.pca.sum<-summary(s.pca))
+```
+
+Loadings and scores for tree characteristics PC1. 
+
+```{r Loadings and scores for orchard tree characteristics PC1, eval = FALSE}
+sentinel.loadings <- s.pca$CA$v
+sentinel.loadings
+```
+
+Scaled, PC1 accounts for 79% of variability in the data, and PC1 and PC2 together account for 96%. PC1 is loaded nearly uniformly with each of the three original variables, and the loadings all have the same sign (negative). So, PC1 is simply a measure of size and fissure depths of trees (i.e., age). Trees with lower PC1 scores have larger trees with deeper fissures. PC2 has fissure most heavily loaded (-) and the other two are positive, so trees with low PC2 scores have shorter thinner trees but a lot of fissering, which is a degree of detail I am not interested in for this analysis. 
+
+Because I find the correlation with predation rates to be very confusing with the sign of a negative loading (especially when all are uniform like this), and because I like to plot positive scores on the right side of plots that correspond to the higher values of the variables in question I took the negative on the loadings and the scores.
+
+```{r easier to interpret tree loadings and scores for orchard tree characteristics PC1}
+# take (-) of loadings and scores for easier interpretation later
+sentinel.loadings <- (-(s.pca$CA$v)) 
+sentinel.loadings  
+```
+
+```{r}
+sentineltree.pc1scores<- -(as.numeric(scores(s.pca, choices = 1, display = "sites"))) 
+head(sentineltree.pc1scores)
+```
+
+Now treepc1 can be interpreted as:
+Sentinel trees with higher PC1 scores have taller, girthier trees with deeper fissures.
+
+>>>>>>> 1c5673e73a321d2569c476a141c5e16ec7066860
